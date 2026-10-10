@@ -17,20 +17,26 @@ supported. No filesystem writes happen anywhere in the app.
    - Root Directory: `zerowaste-ai/backend`
    - Framework preset: FastAPI (auto via `requirements.txt`).
 3. Environment variables (Vercel → Settings → Environment Variables, Production):
-   - `DATABASE_URL=postgresql://.../zerowaste` (use the pooled connection string)
-   - `DEMO_MODE=true`
-   - `API_KEY=<generate, e.g. openssl rand -hex 24>` (required only if you later set `DEMO_MODE=false`)
+   - `DATABASE_URL=postgresql://.../zerowaste` (use the pooled connection string;
+     Neon/Supabase pooled URL. The app never writes to disk.)
+   - `DEMO_MODE=false` (Vercel sets `VERCEL=1` automatically and the app
+     fail-closed refuses `DEMO_MODE=true` on Vercel — see `app/config.py` and
+     `tests/test_auth.py`. Production must use API-key auth.)
+   - `API_KEY=<generate, e.g. openssl rand -hex 24>` (required: backend refuses
+     to boot without a real key when `DEMO_MODE=false`; never commit it)
    - `FRONTEND_ORIGIN=https://<your-frontend>.vercel.app` (comma-separated list allowed; never `*`)
    - `PRODUCTION=1` (caps scenario seeds at 5 so runs finish inside the function timeout)
    - `AUTO_SEED=true` (default; cold start creates schema + fast core seed only — no agent runs, fits function limits; full demo history comes from one explicit reset call)
    - `GEMINI_API_KEY=` (leave empty for template explanations)
 4. Cold-start behavior: first request creates tables and, if `stores` is empty,
    runs the fast core seed (seed=42, batched inserts, <2s). Then call
-   `POST /api/seed/reset` once (with `X-Admin-Token` if you set `ADMIN_TOKEN`
-   on the frontend proxy... note: the backend reset endpoint itself needs no
-   token in DEMO_MODE; the frontend proxy gates it) to build full demo history.
+   `POST /api/seed/reset` once (backend needs `X-API-Key: <API_KEY>`; the
+   frontend proxy additionally gates it with `X-Admin-Token` in production)
+   to build full demo history.
 5. Verify: open `https://<your-backend>.vercel.app/api/health`
-   (expect `{"status":"ok","demo_mode":true,...}`) and `/docs` (OpenAPI).
+   (expect `{"status":"ok","demo_mode":false,...,"db_ok":true}`) and `/docs` (OpenAPI).
+   `/` also returns a small index (`{"service":"ZeroWaste AI API",...}`) so the
+   bare deployment URL never shows a 500.
 
 ## Backend → Render (alternative)
 
@@ -48,9 +54,10 @@ supported. No filesystem writes happen anywhere in the app.
 2. Environment variables (Vercel → Settings → Environment Variables, Production).
    These are SERVER-ONLY (no `NEXT_PUBLIC_` prefix) — the browser talks to
    Next.js route handlers (`app/api/[...slug]`), which attach the key server-side:
-   - `ZEROWASTE_API_BASE=https://<your-backend>.vercel.app`
-   - `ZEROWASTE_API_KEY=` (empty is fine while backend `DEMO_MODE=true`;
-     set both sides consistently if you enable API-key auth)
+   - `ZEROWASTE_API_BASE=https://<your-backend>.vercel.app` (no trailing slash)
+   - `ZEROWASTE_API_KEY=<same value as backend API_KEY>` (required: backend runs
+     `DEMO_MODE=false` on Vercel, so every proxied call must carry the key;
+     the proxy attaches it server-side, never to the browser bundle)
    - `ADMIN_TOKEN=<generate, e.g. openssl rand -hex 24>` — required to call
      the proxied `POST /api/seed/reset` in production (send as `X-Admin-Token`).
      Without it the Seed demo button returns 403 in production; this is

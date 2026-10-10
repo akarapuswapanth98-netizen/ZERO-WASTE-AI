@@ -112,7 +112,7 @@ def release(conn) -> None:
         _pool().putconn(conn)
     except Exception:
         try:
-            release(conn)
+            conn.close()
         except Exception:
             pass
 

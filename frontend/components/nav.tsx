@@ -21,7 +21,7 @@ export function AsofBadge() {
 }
 
 const NAV: Array<[string, string, string]> = [
-  ["Overview", "/", "M3 12l9-8 9 8M5 10v10h5v-6h4v6h5V10"],
+  ["Overview", "/overview", "M3 12l9-8 9 8M5 10v10h5v-6h4v6h5V10"],
   ["Shelves 3D", "/inventory", "M4 7h16M4 12h16M4 17h16M6 4v16M18 4v16"],
   ["Forecast", "/forecast", "M3 17l5-6 4 3 6-8 3 3"],
   ["Risk", "/risk", "M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7l8-4z"],
@@ -32,7 +32,7 @@ const NAV: Array<[string, string, string]> = [
   ["Audit", "/audit", "M6 3h9l4 4v14H6V3zM9 12h7M9 16h7"],
 ];
 
-function ThemeToggle() {
+export function ThemeToggle() {
   const [dark, setDark] = useState(true);
   useEffect(() => {
     const id = window.requestAnimationFrame(() => {
@@ -62,7 +62,7 @@ function ThemeToggle() {
 
 export function Logo() {
   return (
-    <Link href="/" className="flex items-center gap-2.5" aria-label="ZeroWaste AI home">
+    <Link href="/overview" className="flex items-center gap-2.5" aria-label="ZeroWaste AI home">
       <span className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-emerald-400 to-emerald-900 text-[#0B3D2E]" aria-hidden>
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
           <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" />

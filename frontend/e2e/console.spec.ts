@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-const ROUTES = ["/", "/inventory", "/forecast", "/risk", "/agents", "/planner", "/scenarios", "/evaluation", "/audit"];
+const ROUTES = ["/", "/overview", "/inventory", "/forecast", "/risk", "/agents", "/planner", "/scenarios", "/evaluation", "/audit"];
 
 test("no console errors or page errors on any route", async ({ page }) => {
   const errors: string[] = [];

@@ -14,7 +14,7 @@ async function api(path: string, init?: RequestInit) {
 test("full planner journey: seed -> agents -> approve + reject -> execute -> persistence", async ({ page, request }) => {
   // deterministic header state first (backend env pins AS_OF), then UI flows
   await api("/api/seed/reset?seed=42", { method: "POST" });
-  await page.goto("/");
+  await page.goto("/overview");
   await expect(page.getByText("As of 2026-10-05").filter({ visible: true }).first()).toBeVisible({ timeout: 60000 });
   await page.getByRole("button", { name: /Demo tools/ }).click();
   await page.getByRole("button", { name: "Seed demo" }).click();
@@ -130,7 +130,7 @@ test("inventory explorer: 3D loads, backend time-travel recomputes, mobile falls
   if (smallScreen) {
     await expect(page.getByText(/2D fallback active/, { exact: false })).toBeVisible({ timeout: 60000 });
     // hero also falls back to a static gradient + SVG (no canvas) without WebGL
-    await page.goto("/");
+    await page.goto("/overview");
     await expect(page.locator("canvas")).toHaveCount(0);
     await page.goto("/inventory");
     await expect(page.getByText("3D Inventory Explorer")).toBeVisible({ timeout: 60000 });

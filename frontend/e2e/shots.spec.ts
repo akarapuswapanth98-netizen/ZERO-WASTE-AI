@@ -18,10 +18,24 @@ test("capture docs screenshots", async ({ page }, testInfo) => {
   await api("/api/seed/reset?seed=42", { method: "POST" });
   await api("/api/agents/run", { method: "POST", body: JSON.stringify({}) });
 
+  await page.goto("/overview");
+  await expect(page.locator("canvas").first()).toBeVisible({ timeout: 60000 });
+  await page.waitForTimeout(2500);
+  await page.screenshot({ path: `${SHOTS}/01-overview.png` });
+
   await page.goto("/");
   await expect(page.locator("canvas").first()).toBeVisible({ timeout: 60000 });
   await page.waitForTimeout(2500);
-  await page.screenshot({ path: `${SHOTS}/01-overview-hero.png` });
+  await page.screenshot({ path: `${SHOTS}/00-landing-hero.png` });
+  await page.getByText(/How it works/, { exact: false }).scrollIntoViewIfNeeded();
+  await page.waitForTimeout(1200);
+  await page.screenshot({ path: `${SHOTS}/00-landing-how.png` });
+  await page.getByText(/Live from the demo/, { exact: false }).scrollIntoViewIfNeeded();
+  await page.waitForTimeout(4000);
+  await page.screenshot({ path: `${SHOTS}/00-landing-live.png` });
+  await page.getByText(/Everything in the box/, { exact: false }).scrollIntoViewIfNeeded();
+  await page.waitForTimeout(1200);
+  await page.screenshot({ path: `${SHOTS}/00-landing-features.png` });
 
   await page.goto("/inventory");
   await expect(page.locator("canvas").first()).toBeVisible({ timeout: 60000 });

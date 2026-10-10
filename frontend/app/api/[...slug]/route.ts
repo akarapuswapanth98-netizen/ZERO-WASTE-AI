@@ -5,9 +5,8 @@ import { NextResponse, type NextRequest } from "next/server";
 // /api/seed/reset is destructive: in production it additionally requires
 // X-Admin-Token matching server-only ADMIN_TOKEN (403 otherwise). In dev it
 // stays open so Seed demo / E2E keep working.
-const BACKEND = process.env.ZEROWASTE_API_BASE ?? "http://127.0.0.1:8000";
-const KEY = process.env.ZEROWASTE_API_KEY ?? "";
-const ADMIN_TOKEN = process.env.ADMIN_TOKEN ?? "";
+// NOTE: ZEROWASTE_API_BASE / ZEROWASTE_API_KEY / ADMIN_TOKEN are read per-request
+// inside proxy()/seedAllowed() (server-only, never NEXT_PUBLIC_).
 
 // [path pattern, allowed methods]; trailing /* = prefix match (IDs)
 const ALLOW: Array<[string, Array<string>]> = [
@@ -49,11 +48,16 @@ function match(path: string): Array<string> | null {
 
 function seedAllowed(req: NextRequest): boolean {
   if (process.env.NODE_ENV !== "production") return true;
-  if (!ADMIN_TOKEN) return false;
-  return req.headers.get("x-admin-token") === ADMIN_TOKEN;
+  const adminToken = process.env.ADMIN_TOKEN ?? "";
+  if (!adminToken) return false;
+  return req.headers.get("x-admin-token") === adminToken;
 }
 
 async function proxy(req: NextRequest, method: string) {
+  // Read env at request time (not module top) so Vercel env edits take effect
+  // without a code change; strip any trailing slash to avoid `//api/...`.
+  const backend = (process.env.ZEROWASTE_API_BASE ?? "http://127.0.0.1:8000").replace(/\/+$/, "");
+  const key = process.env.ZEROWASTE_API_KEY ?? "";
   const slug = req.nextUrl.pathname.replace(/^\/api\//, "");
   const path = `/api/${slug}`;
   const methods = match(path);
@@ -69,11 +73,11 @@ async function proxy(req: NextRequest, method: string) {
       { status: 403 },
     );
   }
-  const url = `${BACKEND}${path}${req.nextUrl.search}`;
+  const url = `${backend}${path}${req.nextUrl.search}`;
   const headers: Record<string, string> = {};
   const ct = req.headers.get("content-type");
   if (ct) headers["content-type"] = ct;
-  if (KEY) headers["X-API-Key"] = KEY;
+  if (key) headers["X-API-Key"] = key;
   let res: Response;
   try {
     res = await fetch(url, {
@@ -84,7 +88,7 @@ async function proxy(req: NextRequest, method: string) {
     });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
-    return NextResponse.json({ detail: `backend unreachable at ${BACKEND}: ${msg}` }, { status: 502 });
+    return NextResponse.json({ detail: `backend unreachable at ${backend}: ${msg}` }, { status: 502 });
   }
   const buf = await res.arrayBuffer();
   const out = new Headers();

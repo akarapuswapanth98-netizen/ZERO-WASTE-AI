@@ -18,7 +18,14 @@ from contextlib import asynccontextmanager
 async def lifespan(app: FastAPI):
     import logging, os
     from .seed import seed_core
-    db.init_db()
+    try:
+        db.init_db()
+    except Exception as e:
+        # Never crash the serverless function on DB outage: serve degraded
+        # (health reports db_ok=false) until DATABASE_URL is fixed.
+        logging.getLogger(__name__).warning(f"init_db skipped (DB unreachable): {e}")
+        yield
+        return
     if config.AUTO_SEED:
         try:
             conn = db.get_conn()
@@ -45,8 +52,27 @@ def auth(x_api_key: Optional[str] = Header(default=None)):
     if x_api_key != config.API_KEY: raise HTTPException(401, "Invalid API key")
     return "planner"
 
+@app.get("/")
+def root():
+    """Backend index: avoids a bare-500 on the deployment URL; points at health/docs."""
+    try:
+        asof = db.get_asof()
+        db_ok = True
+    except Exception:
+        asof = ""
+        db_ok = False
+    return {"service": "ZeroWaste AI API", "status": "ok" if db_ok else "degraded",
+            "demo_mode": config.DEMO_MODE, "db_ok": db_ok, "asof": asof,
+            "health": "/api/health", "docs": "/docs"}
+
 @app.get("/api/health")
-def health(): return {"status":"ok","demo_mode":config.DEMO_MODE,"synthetic":True,"seed":42,"asof":db.get_asof()}
+def health():
+    try:
+        asof = db.get_asof()
+        return {"status":"ok","demo_mode":config.DEMO_MODE,"synthetic":True,"seed":42,"asof":asof,"db_ok":True}
+    except Exception as e:
+        # Degraded but never a 500: frontend shows a clear message instead of "…".
+        return {"status":"degraded","demo_mode":config.DEMO_MODE,"synthetic":True,"seed":42,"asof":"","db_ok":False,"detail":f"database unreachable: {e}"}
 
 class IngestSale(BaseModel):
     store_id: str; sku: str; date: str; units_sold: int = Field(ge=0); unit_price: float = Field(ge=0); promo: int = 0
