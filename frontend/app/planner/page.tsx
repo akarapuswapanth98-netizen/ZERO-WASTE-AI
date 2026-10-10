@@ -48,7 +48,7 @@ function ScoreBars({ id }: { id: string }) {
           <YAxis type="category" dataKey="name" fontSize={11} width={130} stroke="currentColor" opacity={0.8} />
           <Tooltip formatter={(v) => (typeof v === "number" ? fmtMoney(v) : v)} />
           <Bar dataKey="loss" fill="#66E3A1" radius={[0, 6, 6, 0]} isAnimationActive={false}>
-            {data.map((e, i) => <Cell key={i} fill={(e.loss ?? 0) < 0 ? "#10B981" : "#d97706"} />)}
+            {data.map((e, i) => <Cell key={i} fill={(e.loss ?? 0) < 0 ? "#66E3A1" : "#F4B860"} />)}
           </Bar>
         </BarChart>
       </ResponsiveContainer>

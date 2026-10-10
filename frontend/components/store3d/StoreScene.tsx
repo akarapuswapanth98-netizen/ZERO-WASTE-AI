@@ -15,7 +15,7 @@ const COLD = new Set(["dairy", "meat", "seafood", "ready-to-eat"]);
 const SECTION_W = 2.3;
 const AISLE_GAP = 3.6;
 
-const statusColor = (s: string) => (s === "red" ? "#dc2626" : s === "amber" ? "#d97706" : "#10b981");
+const statusColor = (s: string) => (s === "red" ? "#FF7D78" : s === "amber" ? "#F4B860" : "#66E3A1");
 
 interface Placed extends ShelfGroup {
   x: number; z: number; cold: boolean;
@@ -301,8 +301,8 @@ export default function StoreScene({ items, selectedKey, quality, onQuality, onS
           gl.toneMappingExposure = 1.15;
         }}
       >
-        <color attach="background" args={["#0d1412"]} />
-        <fog attach="fog" args={["#0d1412", 30, 70]} />
+        <color attach="background" args={["#0B1511"]} />
+        <fog attach="fog" args={["#0B1511", 30, 70]} />
         <ambientLight intensity={0.65} />
         <directionalLight position={[6, 12, 6]} intensity={1.0} color="#fff4e0" />
         <Environment resolution={64} frames={1}>

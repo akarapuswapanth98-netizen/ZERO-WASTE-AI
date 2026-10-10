@@ -80,7 +80,7 @@ function Dust({ count = 120 }: { count?: number }) {
       <bufferGeometry>
         <bufferAttribute attach="attributes-position" args={[pos, 3]} />
       </bufferGeometry>
-      <pointsMaterial size={0.035} color="#6ee7b7" transparent opacity={0.7} sizeAttenuation />
+      <pointsMaterial size={0.035} color="#66E3A1" transparent opacity={0.7} sizeAttenuation />
     </points>
   );
 }

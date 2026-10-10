@@ -55,7 +55,7 @@ export function makeSignTexture(text: string): THREE.CanvasTexture {
   const { c, ctx } = canvas(512, 128);
   ctx.fillStyle = "#0B3D2E";
   ctx.fillRect(0, 0, 512, 128);
-  ctx.fillStyle = "#10B981";
+  ctx.fillStyle = "#66E3A1";
   ctx.fillRect(0, 112, 512, 16);
   ctx.fillStyle = "#f2f7f2";
   ctx.font = "bold 56px Arial";

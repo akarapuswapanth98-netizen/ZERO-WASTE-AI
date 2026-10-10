@@ -170,8 +170,8 @@ export default function Scenarios() {
                 <XAxis dataKey="metric" fontSize={12} stroke="currentColor" opacity={0.6} />
                 <YAxis fontSize={12} stroke="currentColor" opacity={0.6} />
                 <Tooltip formatter={(v) => (typeof v === "number" ? v.toLocaleString() : v)} /><Legend />
-                <Bar dataKey="agentic" fill="#10B981" isAnimationActive={false} />
-                <Bar dataKey="fifo" fill="#94a3b8" isAnimationActive={false} />
+                <Bar dataKey="agentic" fill="#66E3A1" isAnimationActive={false} />
+                <Bar dataKey="fifo" fill="#8DA99A" isAnimationActive={false} />
                 <Bar dataKey="fixed" fill="#d97706" isAnimationActive={false} />
               </BarChart>
             </ResponsiveContainer>

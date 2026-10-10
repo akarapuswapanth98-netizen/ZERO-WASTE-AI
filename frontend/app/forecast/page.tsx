@@ -104,13 +104,13 @@ export default function ForecastPage() {
                 <YAxis fontSize={12} stroke="currentColor" opacity={0.6} />
                 <Tooltip />
                 <Legend />
-                <Area dataKey="hi" stroke="none" fill="#10B981" fillOpacity={0.12} name="80% band" isAnimationActive={false} />
+                <Area dataKey="hi" stroke="none" fill="#66E3A1" fillOpacity={0.12} name="80% band" isAnimationActive={false} />
                 <Area dataKey="lo" stroke="none" fill="#0B3D2E" fillOpacity={0.25} name="" isAnimationActive={false} />
-                <Line dataKey="actual" stroke="#94a3b8" dot={false} name="History (held-out shaded at right)" isAnimationActive={false} />
-                <Line dataKey="sesT" stroke="#10B981" strokeDasharray="4 2" dot={false} name="SES on held-out" isAnimationActive={false} />
+                <Line dataKey="actual" stroke="#8DA99A" dot={false} name="History (held-out shaded at right)" isAnimationActive={false} />
+                <Line dataKey="sesT" stroke="#66E3A1" strokeDasharray="4 2" dot={false} name="SES on held-out" isAnimationActive={false} />
                 <Line dataKey="maT" stroke="#d97706" strokeDasharray="4 2" dot={false} name="MA on held-out" isAnimationActive={false} />
                 <Line dataKey="seasT" stroke="#38bdf8" strokeDasharray="4 2" dot={false} name="Seasonal on held-out" isAnimationActive={false} />
-                <Line dataKey="fc" stroke="#10B981" strokeWidth={2} dot={false} name={`Forecast (${data.engine ?? data.winner})`} isAnimationActive={false} />
+                <Line dataKey="fc" stroke="#66E3A1" strokeWidth={2} dot={false} name={`Forecast (${data.engine ?? data.winner})`} isAnimationActive={false} />
               </ComposedChart>
             </ResponsiveContainer>
             <p className="text-xs opacity-60">Shaded band = {data.interval_label} (z={data.interval_z}, σ={data.residual_std}). Dashed lines replay each model over the held-out final {data.test_len} days against actual history.</p>
