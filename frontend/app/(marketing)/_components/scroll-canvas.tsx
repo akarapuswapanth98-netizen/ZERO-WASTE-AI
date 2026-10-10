@@ -1,23 +1,29 @@
 "use client";
-import type { RefObject } from "react";
 import { useRef } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { ContactShadows, Environment, Lightformer } from "@react-three/drei";
 import * as THREE from "three";
 import { ProductRow } from "@/components/store3d/products";
 
+import { useMotionValueEvent } from "framer-motion";
+import type { MotionValue } from "framer-motion";
+
 export type ProgressRef = { current: number };
 
 const STOPS = ["#66E3A1", "#F4B860", "#FF7D78"];
 
-function MomentScene({ progressRef, animated }: { progressRef: RefObject<ProgressRef>; animated: boolean }) {
+function MomentScene({ progress, animated }: { progress: MotionValue<number>; animated: boolean }) {
   const leds = useRef<Array<THREE.MeshStandardMaterial | null>>([]);
   const cam = useRef<{ x: number }>({ x: -4.5 });
+  const holderRef = useRef<ProgressRef>({ current: 0.35 });
+  useMotionValueEvent(progress, "change", (v) => {
+    holderRef.current.current = v;
+  });
   const invalidate = useThree((s) => s.invalidate);
   const cA = [new THREE.Color(STOPS[0]), new THREE.Color(STOPS[1]), new THREE.Color(STOPS[2])];
   const tmp = new THREE.Color();
   useFrame((state) => {
-    const p = Math.min(1, Math.max(0, progressRef.current?.current ?? 0.35));
+    const p = Math.min(1, Math.max(0, holderRef.current.current));
     const cx = -4.5 + p * 9;
     if (animated) {
       cam.current.x += (cx - cam.current.x) * 0.08;
@@ -89,7 +95,7 @@ function MomentScene({ progressRef, animated }: { progressRef: RefObject<Progres
   );
 }
 
-export default function ScrollCanvas({ progressRef, animated }: { progressRef: RefObject<ProgressRef>; animated: boolean }) {
+export default function ScrollCanvas({ progress, animated }: { progress: MotionValue<number>; animated: boolean }) {
   return (
     <Canvas
       dpr={[1, 1.5]}
@@ -101,7 +107,7 @@ export default function ScrollCanvas({ progressRef, animated }: { progressRef: R
         gl.toneMappingExposure = 1.05;
       }}
     >
-      <MomentScene progressRef={progressRef} animated={animated} />
+      <MomentScene progress={progress} animated={animated} />
     </Canvas>
   );
 }

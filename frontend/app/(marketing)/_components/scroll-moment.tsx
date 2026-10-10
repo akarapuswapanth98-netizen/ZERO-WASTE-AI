@@ -1,8 +1,7 @@
 "use client";
 import { Suspense, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import { useInView, useMotionValueEvent, useReducedMotion, useScroll } from "framer-motion";
-import type { ProgressRef } from "./scroll-canvas";
+import { useInView, useReducedMotion, useScroll } from "framer-motion";
 
 const LazyScrollCanvas = dynamic(() => import("./scroll-canvas"), { ssr: false });
 
@@ -13,11 +12,7 @@ export default function ScrollMoment() {
   const inView = useInView(wrapRef, { amount: 0.1 });
   const reduce = useReducedMotion();
   const [webgl, setWebgl] = useState<boolean | null>(null);
-  const progressRef = useRef<ProgressRef>({ current: 0.35 });
   const { scrollYProgress } = useScroll({ target: sectionRef, offset: ["start end", "end start"] });
-  useMotionValueEvent(scrollYProgress, "change", (v) => {
-    progressRef.current.current = v;
-  });
   useEffect(() => {
     const id = window.requestAnimationFrame(() => {
       try {
@@ -47,7 +42,7 @@ export default function ScrollMoment() {
         )}
         {showCanvas && inView && (
           <Suspense fallback={<div className="skeleton absolute inset-0" />}>
-            <LazyScrollCanvas progress={progressRef.current} animated={!reduce} />
+            <LazyScrollCanvas progress={scrollYProgress} animated={!reduce} />
           </Suspense>
         )}
       </div>
