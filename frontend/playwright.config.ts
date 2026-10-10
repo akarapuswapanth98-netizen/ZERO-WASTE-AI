@@ -20,6 +20,7 @@ export default defineConfig({
       timeout: 90000,
       env: {
         AS_OF: "2026-10-05",
+        DEMO_MODE: "true",
         DATABASE_URL: process.env.E2E_DATABASE_URL ?? "postgresql://postgres:postgres@127.0.0.1:5434/zerowaste_e2e",
       },
     },
