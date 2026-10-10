@@ -47,7 +47,7 @@ function ScoreBars({ id }: { id: string }) {
           <XAxis type="number" fontSize={11} stroke="currentColor" opacity={0.6} />
           <YAxis type="category" dataKey="name" fontSize={11} width={130} stroke="currentColor" opacity={0.8} />
           <Tooltip formatter={(v) => (typeof v === "number" ? fmtMoney(v) : v)} />
-          <Bar dataKey="loss" fill="#10B981" radius={[0, 6, 6, 0]} isAnimationActive={false}>
+          <Bar dataKey="loss" fill="#66E3A1" radius={[0, 6, 6, 0]} isAnimationActive={false}>
             {data.map((e, i) => <Cell key={i} fill={(e.loss ?? 0) < 0 ? "#10B981" : "#d97706"} />)}
           </Bar>
         </BarChart>

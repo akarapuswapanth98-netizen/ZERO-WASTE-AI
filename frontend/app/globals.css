@@ -12,13 +12,20 @@
   --glow: rgba(16, 185, 129, 0.35);
 }
 .dark {
-  --bg: #0a1512;
+  --bg: #0B1511;
   --ink: #eef4ef;
   --muted: #9fb0a8;
-  --glass-bg: rgba(255, 255, 255, 0.07);
-  --glass-brd: rgba(255, 255, 255, 0.12);
-  --nav-bg: rgba(10, 21, 18, 0.82);
-  --glow: rgba(16, 185, 129, 0.45);
+  --glass-bg: rgba(182, 255, 231, 0.07);
+  --glass-brd: rgba(181, 225, 190, 0.12);
+  --nav-bg: rgba(16, 29, 22, 0.82);
+  --glow: rgba(102, 227, 161, 0.45);
+  --color-emerald-300: #66E3A1;
+  --color-emerald-400: #66E3A1;
+  --color-emerald-500: #43C985;
+  --color-emerald-900: #1C3A2A;
+  --color-red-400: #FF7D78;
+  --color-red-500: #FF7D78;
+  --color-amber-300: #F4B860;
 }
 
 html, body { height: 100%; }
@@ -34,7 +41,7 @@ h1, h2, h3, .font-display { font-family: var(--font-display), var(--font-body), 
   border-radius: 1rem;
 }
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .glass { background: #12251d; }
+  .glass { background: #172A20; }
   :root .glass { background: #ffffff; }
 }
 .glass-input {
@@ -64,13 +71,25 @@ select.glass-input option { color: #111827; }
 
 input[type="range"] { accent-color: #10b981; }
 input[type="range"]:focus-visible { outline: 2px solid #10b981; outline-offset: 2px; }
-.dark input[type="range"] { accent-color: #34d399; }
+.dark input[type="range"] { accent-color: #66E3A1; }
 
-.badge-low { background: rgba(16, 185, 129, 0.18); color: #065f46; }
+.dark .btn-primary {
+  background: linear-gradient(135deg, #66E3A1, #43C985);
+  color: #0B1511;
+}
+.dark .btn-danger {
+  background: rgba(255, 125, 120, 0.16);
+  border-color: rgba(255, 125, 120, 0.45);
+}
+.dark .glass-input:focus-visible { outline-color: #66E3A1; }
+.dark .btn:focus-visible { outline-color: #66E3A1; }
+.dark input[type="range"]:focus-visible { outline-color: #66E3A1; }
+
+.badge-low { background: rgba(102, 227, 161, 0.18); color: #065f46; }
 .dark .badge-low { color: #6ee7b7; }
-.badge-med { background: rgba(217, 119, 6, 0.18); color: #92400e; }
+.badge-med { background: rgba(244, 184, 96, 0.18); color: #92400e; }
 .dark .badge-med { color: #fcd34d; }
-.badge-high { background: rgba(220, 38, 38, 0.18); color: #991b1b; }
+.badge-high { background: rgba(255, 125, 120, 0.18); color: #991b1b; }
 .dark .badge-high { color: #fca5a5; }
 
 .skeleton { position: relative; overflow: hidden; background: rgba(127, 140, 132, 0.22); border-radius: 0.75rem; }

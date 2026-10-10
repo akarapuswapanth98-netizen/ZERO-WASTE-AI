@@ -190,8 +190,8 @@ export default function AgentsPage() {
                     </button>
                     {i < AGENTS.length - 1 && (
                       <svg width="34" height="20" viewBox="0 0 34 20" className="flow-edge mx-auto shrink-0 rotate-90 md:rotate-0" aria-hidden>
-                        <line x1="2" y1="10" x2="26" y2="10" stroke="#10B981" strokeWidth="2" strokeDasharray="5 4" />
-                        <polygon points="26,5 34,10 26,15" fill="#10B981" />
+                        <line x1="2" y1="10" x2="26" y2="10" stroke="#66E3A1" strokeWidth="2" strokeDasharray="5 4" />
+                        <polygon points="26,5 34,10 26,15" fill="#66E3A1" />
                       </svg>
                     )}
                   </div>

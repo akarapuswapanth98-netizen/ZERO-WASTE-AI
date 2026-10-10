@@ -77,9 +77,9 @@ export function EmptyPanel({ title, body, action }: { title: string; body: strin
   return (
     <div className="glass p-6 text-center">
       <svg width="72" height="72" viewBox="0 0 72 72" className="mx-auto opacity-70" aria-hidden>
-        <rect x="10" y="26" width="52" height="34" rx="6" fill="none" stroke="#10b981" strokeWidth="3" />
-        <path d="M18 26v-6a8 8 0 0 1 8-8h20a8 8 0 0 1 8 8v6" fill="none" stroke="#10b981" strokeWidth="3" />
-        <path d="M30 44c2-5 6-8 12-8-1 6-5 10-12 8z" fill="#10b981" opacity="0.7" />
+        <rect x="10" y="26" width="52" height="34" rx="6" fill="none" stroke="#66E3A1" strokeWidth="3" />
+        <path d="M18 26v-6a8 8 0 0 1 8-8h20a8 8 0 0 1 8 8v6" fill="none" stroke="#66E3A1" strokeWidth="3" />
+        <path d="M30 44c2-5 6-8 12-8-1 6-5 10-12 8z" fill="#66E3A1" opacity="0.7" />
       </svg>
       <p className="mt-2 font-bold">{title}</p>
       <p className="mx-auto mt-1 max-w-md text-sm opacity-70">{body}</p>

@@ -38,11 +38,11 @@ function HeroFallback() {
     <div className="absolute inset-0 overflow-hidden" aria-hidden>
       <div className="absolute inset-0 bg-gradient-to-br from-[#0B3D2E] via-[#0a2a20] to-[#111827]" />
       <svg className="absolute inset-0 h-full w-full opacity-40" viewBox="0 0 800 400" preserveAspectRatio="xMidYMid slice">
-        <circle cx="560" cy="190" r="90" fill="none" stroke="#10B981" strokeWidth="2" opacity="0.7" />
-        <circle cx="560" cy="190" r="130" fill="none" stroke="#f59e0b" strokeWidth="1.5" opacity="0.4" />
-        <circle cx="440" cy="150" r="18" fill="#dc2626" opacity="0.8" />
-        <rect x="660" y="120" width="34" height="42" rx="6" fill="#d97706" opacity="0.8" />
-        <ellipse cx="500" cy="260" rx="26" ry="14" fill="#059669" opacity="0.8" />
+        <circle cx="560" cy="190" r="90" fill="none" stroke="#66E3A1" strokeWidth="2" opacity="0.7" />
+        <circle cx="560" cy="190" r="130" fill="none" stroke="#F4B860" strokeWidth="1.5" opacity="0.4" />
+        <circle cx="440" cy="150" r="18" fill="#FF7D78" opacity="0.8" />
+        <rect x="660" y="120" width="34" height="42" rx="6" fill="#F4B860" opacity="0.8" />
+        <ellipse cx="500" cy="260" rx="26" ry="14" fill="#66E3A1" opacity="0.8" />
         <path d="M610 240l22-14 6 26-22 14z" fill="#38bdf8" opacity="0.8" />
       </svg>
     </div>
@@ -293,7 +293,7 @@ export default function Overview() {
                   <XAxis dataKey="name" fontSize={11} stroke="currentColor" opacity={0.6} interval={0} angle={-18} dy={10} height={52} />
                   <YAxis fontSize={12} stroke="currentColor" opacity={0.6} />
                   <Tooltip />
-                  <Bar dataKey="value" fill="#10B981" radius={[8, 8, 0, 0]} isAnimationActive={false} />
+                  <Bar dataKey="value" fill="#66E3A1" radius={[8, 8, 0, 0]} isAnimationActive={false} />
                 </BarChart>
               </ResponsiveContainer>
             </GlassCard>
@@ -302,7 +302,7 @@ export default function Overview() {
               <ResponsiveContainer width="100%" height={220}>
                 <PieChart>
                   <Pie data={health} dataKey="value" nameKey="name" outerRadius={80} label isAnimationActive={false}>
-                    {health.map((_, i) => <Cell key={i} fill={["#dc2626", "#d97706", "#10B981"][i]} />)}
+                    {health.map((_, i) => <Cell key={i} fill={["#FF7D78", "#F4B860", "#66E3A1"][i]} />)}
                   </Pie>
                   <Tooltip />
                 </PieChart>

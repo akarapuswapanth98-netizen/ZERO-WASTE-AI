@@ -38,7 +38,7 @@ function MiniMetric({ title, rows, money }: {
           <XAxis type="number" fontSize={10} stroke="currentColor" opacity={0.6} />
           <YAxis type="category" dataKey="name" fontSize={10} width={86} stroke="currentColor" opacity={0.8} />
           <Tooltip formatter={(v) => (typeof v === "number" ? fmt(v) : v)} />
-          <Bar dataKey="mean" fill="#10B981" radius={[0, 6, 6, 0]} isAnimationActive={false}>
+          <Bar dataKey="mean" fill="#66E3A1" radius={[0, 6, 6, 0]} isAnimationActive={false}>
             <ErrorBar dataKey="range" width={5} strokeWidth={2} stroke="#e8f0ea" />
           </Bar>
         </BarChart>
