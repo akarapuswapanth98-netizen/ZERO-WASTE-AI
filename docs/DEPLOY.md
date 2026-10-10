@@ -1,6 +1,6 @@
 # Deploy — ZeroWaste AI (exact steps, no live URL claimed)
 
-## Backend → Vercel (FastAPI + Postgres)
+## Backend → Vercel (FastAPI + SQLite zero-setup or Postgres)
 
 Per [Vercel Python runtime](https://vercel.com/docs/functions/runtimes/python)
 and [FastAPI](https://vercel.com/docs/frameworks/backend/fastapi) docs (checked
@@ -8,17 +8,28 @@ and [FastAPI](https://vercel.com/docs/frameworks/backend/fastapi) docs (checked
 object from a supported entrypoint. Ours is `app/main.py` (inside `backend/`),
 so it works zero-config; `backend/vercel.json` pins `app/main.py` with
 `maxDuration: 60` and excludes `tests/**` from the bundle. Lifespan events are
-supported. No filesystem writes happen anywhere in the app.
+supported.
 
-1. Push `zerowaste-ai/` to GitHub. Create a Postgres database (Neon, Supabase,
-   or any pooled Postgres) with three databases: `zerowaste`, `zerowaste_test`,
-   `zerowaste_e2e`.
+Database — two options (same schema, same API):
+- A (zero-setup, default): embedded SQLite at `sqlite:////tmp/zerowaste.db`.
+  On Vercel, an unset `DATABASE_URL` (or the local default pointing at
+  `127.0.0.1`/`localhost`) auto-falls-back to that path
+  (see `app/database.py:_effective_url`). `/tmp` is the only writable dir;
+  data is ephemeral across cold starts but `AUTO_SEED` re-creates schema +
+  core demo data, so the site stays healthy with no account or dashboard setup.
+- B (persistent): pooled Postgres (Neon/Supabase) via
+  `DATABASE_URL=postgresql://.../zerowaste`. Same code path as local/tests.
+
+1. Push `zerowaste-ai/` to GitHub. For option B only, create a Postgres
+   database (Neon, Supabase, or any pooled Postgres) with three databases:
+   `zerowaste`, `zerowaste_test`, `zerowaste_e2e`.
 2. Vercel → Add New → Project → import the repo.
    - Root Directory: `zerowaste-ai/backend`
    - Framework preset: FastAPI (auto via `requirements.txt`).
 3. Environment variables (Vercel → Settings → Environment Variables, Production):
-   - `DATABASE_URL=postgresql://.../zerowaste` (use the pooled connection string;
-     Neon/Supabase pooled URL. The app never writes to disk.)
+   - `DATABASE_URL=` — leave unset for zero-setup SQLite (option A), or set
+     `DATABASE_URL=sqlite:////tmp/zerowaste.db` explicitly, or set
+     `DATABASE_URL=postgresql://.../zerowaste` for persistent Postgres (option B).
    - `DEMO_MODE=false` (Vercel sets `VERCEL=1` automatically and the app
      fail-closed refuses `DEMO_MODE=true` on Vercel — see `app/config.py` and
      `tests/test_auth.py`. Production must use API-key auth.)

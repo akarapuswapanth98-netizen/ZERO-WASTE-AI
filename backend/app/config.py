@@ -2,8 +2,10 @@
 
 Demo mode is opt-in (DEMO_MODE=true, local only). Anything else requires a
 real API_KEY; production/VERCEL + DEMO_MODE=true refuses to start.
-Database is Postgres via DATABASE_URL. Tests MUST use TEST_DATABASE_URL;
-see backend/tests/conftest.py which enforces this.
+Database is Postgres via DATABASE_URL, with a zero-setup SQLite fallback:
+DATABASE_URL=sqlite:////tmp/zerowaste.db (or, on Vercel, an unset/localhost
+URL auto-falls-back to that path — see app/database._effective_url).
+Tests MUST use TEST_DATABASE_URL; see backend/tests/conftest.py.
 """
 from __future__ import annotations
 import os
