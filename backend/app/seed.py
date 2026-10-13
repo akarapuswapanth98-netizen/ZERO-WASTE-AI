@@ -4,7 +4,7 @@ import random
 from typing import Dict, List, Optional, Tuple
 import numpy as np
 from app.config import get_settings
-from app.database import get_db_cursor
+from app.database import get_db_cursor, is_sqlite
 from app.schema import apply_schema
 
 # 5 Defined Stores
@@ -58,7 +58,11 @@ def seed_database(
 
     with get_db_cursor(database_url) as cur:
         if force_reset:
-            cur.execute("TRUNCATE planner_decisions, recommendations, agent_runs, inventory_batches, sales_history, products, stores, sim_system_events, scenario_runs, audit_logs CASCADE;")
+            if is_sqlite(database_url):
+                for tbl in ["planner_decisions", "recommendations", "agent_runs", "inventory_batches", "sales_history", "products", "stores", "sim_system_events", "scenario_runs", "audit_logs"]:
+                    cur.execute(f"DELETE FROM {tbl};")
+            else:
+                cur.execute("TRUNCATE planner_decisions, recommendations, agent_runs, inventory_batches, sales_history, products, stores, sim_system_events, scenario_runs, audit_logs CASCADE;")
         else:
             cur.execute("SELECT COUNT(*) FROM stores;")
             if cur.fetchone()[0] >= 5:

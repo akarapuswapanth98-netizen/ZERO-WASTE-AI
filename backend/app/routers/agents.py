@@ -276,15 +276,24 @@ def get_agent_traces(limit: int = Query(default=30, ge=1, le=100)):
             """,
             (limit,),
         )
+        def _p(val):
+            if isinstance(val, str):
+                try:
+                    import json
+                    return json.loads(val)
+                except Exception:
+                    return val
+            return val
+
         traces = [
             {
                 "id": r[0],
-                "run_timestamp": r[1].isoformat(),
+                "run_timestamp": r[1].isoformat() if hasattr(r[1], "isoformat") else str(r[1]),
                 "store_id": r[2],
                 "product_id": r[3],
                 "agent_name": r[4],
-                "inputs": r[5],
-                "outputs": r[6],
+                "inputs": _p(r[5]),
+                "outputs": _p(r[6]),
                 "execution_time_ms": float(r[7]),
                 "validation_passed": r[8],
                 "error_message": r[9],

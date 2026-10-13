@@ -21,6 +21,15 @@ def get_audit_logs(
     query += " ORDER BY timestamp DESC LIMIT %s;"
     params.append(limit)
 
+    def _pjson(val):
+        if isinstance(val, str):
+            try:
+                import json
+                return json.loads(val)
+            except Exception:
+                return val
+        return val
+
     with get_db_cursor() as cur:
         cur.execute(query, tuple(params))
         logs = [
@@ -30,8 +39,8 @@ def get_audit_logs(
                 "entity_type": r[2],
                 "entity_id": r[3],
                 "actor": r[4],
-                "details": r[5],
-                "timestamp": r[6].isoformat(),
+                "details": _pjson(r[5]),
+                "timestamp": r[6].isoformat() if hasattr(r[6], "isoformat") else str(r[6]),
             }
             for r in cur.fetchall()
         ]
@@ -60,8 +69,8 @@ def get_simulated_system_events(
                 "id": r[0],
                 "system_name": r[1],
                 "event_type": r[2],
-                "payload": r[3],
-                "timestamp": r[4].isoformat(),
+                "payload": _pjson(r[3]),
+                "timestamp": r[4].isoformat() if hasattr(r[4], "isoformat") else str(r[4]),
             }
             for r in cur.fetchall()
         ]

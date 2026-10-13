@@ -1,4 +1,4 @@
-"""Planner recommendations and execution decision endpoints."""
+import json
 from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from app.auth import verify_api_key
@@ -48,6 +48,14 @@ def list_recommendations(
         cur.execute(query, tuple(params))
         rows = cur.fetchall()
 
+    def _parse_alt(val):
+        if isinstance(val, str):
+            try:
+                return json.loads(val)
+            except Exception:
+                return val
+        return val
+
     items = [
         {
             "id": r[0],
@@ -60,17 +68,17 @@ def list_recommendations(
             "proposed_action": r[7],
             "proposed_quantity": r[8],
             "current_stock": r[9],
-            "expiry_date": r[10].isoformat() if r[10] else None,
+            "expiry_date": r[10].isoformat() if hasattr(r[10], "isoformat") else (str(r[10]) if r[10] else None),
             "forecast_demand": float(r[11]),
             "risk_level": r[12],
             "risk_ratio": float(r[13]),
             "expected_loss": float(r[14]),
             "waste_avoided_kg": float(r[15]),
             "cost_impact": float(r[16]),
-            "alternatives": r[17],
+            "alternatives": _parse_alt(r[17]),
             "explanation": r[18],
             "status": r[19],
-            "created_at": r[20].isoformat() if r[20] else None,
+            "created_at": r[20].isoformat() if hasattr(r[20], "isoformat") else (str(r[20]) if r[20] else None),
         }
         for r in rows
     ]

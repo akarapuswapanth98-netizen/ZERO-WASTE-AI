@@ -110,7 +110,7 @@ def assistant_chat(req: ChatMessageRequest):
 
             if rows:
                 item_lines = [
-                    f"• {r[0]} ({r[1]}) at {r[2]}: {r[5]} units expiring on {r[4].isoformat()} (Batch {r[3]})"
+                    f"• {r[0]} ({r[1]}) at {r[2]}: {r[5]} units expiring on {r[4].isoformat() if hasattr(r[4], 'isoformat') else str(r[4])} (Batch {r[3]})"
                     for r in rows
                 ]
                 reply = (
