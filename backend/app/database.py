@@ -1,6 +1,7 @@
 import atexit
 import datetime
 import os
+import re
 import sqlite3
 from contextlib import contextmanager
 from typing import Any, Generator, Optional
@@ -71,7 +72,14 @@ class SqliteCursorWrapper:
     def __init__(self, cursor: sqlite3.Cursor):
         self._cursor = cursor
 
+    @staticmethod
+    def _sanitize_sql(sql: str) -> str:
+        # Strip Postgres-specific row-locking clauses like FOR UPDATE
+        sql = re.sub(r'\s+FOR\s+UPDATE\b', '', sql, flags=re.IGNORECASE)
+        return sql.replace("%s", "?")
+
     def execute(self, sql: str, params: Any = ()):
+        sql = self._sanitize_sql(sql)
         if params is not None and len(params) > 0:
             # Convert any date/datetime/bool in params to strings/ints
             clean_params = []
@@ -82,12 +90,11 @@ class SqliteCursorWrapper:
                     clean_params.append(1 if p else 0)
                 else:
                     clean_params.append(p)
-            sql = sql.replace("%s", "?")
             return self._cursor.execute(sql, tuple(clean_params))
         return self._cursor.execute(sql)
 
     def executemany(self, sql: str, rows: Any):
-        sql = sql.replace("%s", "?")
+        sql = self._sanitize_sql(sql)
         clean_rows = []
         for row in rows:
             clean_row = []
