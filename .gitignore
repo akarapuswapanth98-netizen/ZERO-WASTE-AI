@@ -1,20 +1,47 @@
+# Environment and secrets
 .env
 .env.*
 !.env.example
+
+# Databases and local cluster data
 *.db
 *.sqlite
+*.sqlite3
+.local_pg_data/
+pgdata/
+local_db/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+dist/
+build/
+venv/
+.venv/
+
+# Node and Next.js
 node_modules/
 .next/
-__pycache__/
-.pytest_cache/
-.venv/
-venv/
+out/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Testing and reports
 test-results/
 playwright-report/
-.vercel/
-data/
-pgdata*/
-*.log
-pytest-*.txt
-backend/prof*.py
-playwright-*.txt
+.playwright/
+coverage/
+
+# IDE and OS
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+*.tsbuildinfo

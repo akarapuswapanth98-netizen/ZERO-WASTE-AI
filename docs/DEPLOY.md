@@ -1,107 +1,152 @@
-# Deploy — ZeroWaste AI (exact steps, no live URL claimed)
+# ZeroWaste AI — Production Deployment Guide (Vercel + Neon)
 
-## Backend → Vercel (FastAPI + SQLite zero-setup or Postgres)
+This guide provides step-by-step instructions for deploying **ZeroWaste AI** to Vercel as two separate projects originating from a single GitHub repository.
 
-Per [Vercel Python runtime](https://vercel.com/docs/functions/runtimes/python)
-and [FastAPI](https://vercel.com/docs/frameworks/backend/fastapi) docs (checked
-2026-10-10): Vercel detects FastAPI from `requirements.txt` and loads the `app`
-object from a supported entrypoint. Ours is `app/main.py` (inside `backend/`),
-so it works zero-config; `backend/vercel.json` pins `app/main.py` with
-`maxDuration: 60` and excludes `tests/**` from the bundle. Lifespan events are
-supported.
+---
 
-Database — two options (same schema, same API):
-- A (zero-setup, default): embedded SQLite at `sqlite:////tmp/zerowaste.db`.
-  On Vercel, an unset `DATABASE_URL` (or the local default pointing at
-  `127.0.0.1`/`localhost`) auto-falls-back to that path
-  (see `app/database.py:_effective_url`). `/tmp` is the only writable dir;
-  data is ephemeral across cold starts but `AUTO_SEED` re-creates schema +
-  core demo data, so the site stays healthy with no account or dashboard setup.
-- B (persistent): pooled Postgres (Neon/Supabase) via
-  `DATABASE_URL=postgresql://.../zerowaste`. Same code path as local/tests.
+## Architecture Overview
 
-1. Push `zerowaste-ai/` to GitHub. For option B only, create a Postgres
-   database (Neon, Supabase, or any pooled Postgres) with three databases:
-   `zerowaste`, `zerowaste_test`, `zerowaste_e2e`.
-2. Vercel → Add New → Project → import the repo.
-   - Root Directory: `zerowaste-ai/backend`
-   - Framework preset: FastAPI (auto via `requirements.txt`).
-3. Environment variables (Vercel → Settings → Environment Variables, Production):
-   - `DATABASE_URL=` — leave unset for zero-setup SQLite (option A), or set
-     `DATABASE_URL=sqlite:////tmp/zerowaste.db` explicitly, or set
-     `DATABASE_URL=postgresql://.../zerowaste` for persistent Postgres (option B).
-   - `DEMO_MODE=false` (Vercel sets `VERCEL=1` automatically and the app
-     fail-closed refuses `DEMO_MODE=true` on Vercel — see `app/config.py` and
-     `tests/test_auth.py`. Production must use API-key auth.)
-   - `API_KEY=<generate, e.g. openssl rand -hex 24>` (required: backend refuses
-     to boot without a real key when `DEMO_MODE=false`; never commit it)
-   - `FRONTEND_ORIGIN=https://<your-frontend>.vercel.app` (comma-separated list allowed; never `*`)
-   - `PRODUCTION=1` (caps scenario seeds at 5 so runs finish inside the function timeout)
-   - `AUTO_SEED=true` (default; cold start creates schema + fast core seed only — no agent runs, fits function limits; full demo history comes from one explicit reset call)
-   - `GEMINI_API_KEY=` (leave empty for template explanations)
-4. Cold-start behavior: first request creates tables and, if `stores` is empty,
-   runs the fast core seed (seed=42, batched inserts, <2s). Then call
-   `POST /api/seed/reset` once (backend needs `X-API-Key: <API_KEY>`; the
-   frontend proxy additionally gates it with `X-Admin-Token` in production)
-   to build full demo history.
-5. Verify: open `https://<your-backend>.vercel.app/api/health`
-   (expect `{"status":"ok","demo_mode":false,...,"db_ok":true}`) and `/docs` (OpenAPI).
-   `/` also returns a small index (`{"service":"ZeroWaste AI API",...}`) so the
-   bare deployment URL never shows a 500.
-
-## Backend → Render (alternative)
-
-1. Root Directory: `zerowaste-ai/backend`. Environment: Python 3.13.
-   Build: `pip install -r requirements.txt`. Start: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`.
-2. Same env vars as above, with `DATABASE_URL` pointing at Render Postgres
-   (or any external Postgres). No disk needed — Postgres is the persistence.
-   (The old SQLite disk option is retired with the Postgres port.)
-
-## Frontend → Vercel (Next.js 16)
-
-1. Vercel → Add New → Project → import the repo.
-   - Root Directory: `zerowaste-ai/frontend`
-   - Framework preset: Next.js (auto). Build: `npm run build` (`vercel.json` present).
-2. Environment variables (Vercel → Settings → Environment Variables, Production).
-   These are SERVER-ONLY (no `NEXT_PUBLIC_` prefix) — the browser talks to
-   Next.js route handlers (`app/api/[...slug]`), which attach the key server-side:
-   - `ZEROWASTE_API_BASE=https://<your-backend>.vercel.app` (no trailing slash)
-   - `ZEROWASTE_API_KEY=<same value as backend API_KEY>` (required: backend runs
-     `DEMO_MODE=false` on Vercel, so every proxied call must carry the key;
-     the proxy attaches it server-side, never to the browser bundle)
-   - `ADMIN_TOKEN=<generate, e.g. openssl rand -hex 24>` — required to call
-     the proxied `POST /api/seed/reset` in production (send as `X-Admin-Token`).
-     Without it the Seed demo button returns 403 in production; this is
-     intentional (verified: no token → 403, wrong token → 403, correct → 200).
-   There is deliberately no `NEXT_PUBLIC_API_*` variable: `npm run scan:secrets`
-   (after a canary build) fails the deploy if a key ever lands in `.next/static`.
-3. Deploy → open the production URL → Overview should load live stats.
-   If it shows "Backend unreachable", the API URL/FRONTEND_ORIGIN values are wrong.
-4. Screenshots for the deck: run `npx playwright test --project=desktop e2e/shots.spec.ts`
-   locally (needs both servers up — the Playwright `webServer` block starts them),
-   outputs land in `docs/screenshots/`.
-
-## Local Postgres (dev/tests)
-
-No system Postgres is required: `pip install postgresql-binaries` provides
-server binaries with no admin install. Then:
-
-```powershell
-$pgbin = python -c "from postgresql_binaries import bin; print(bin())"
-& "$pgbin\initdb.exe" -D $env:TEMP\pgdata -U postgres --auth=trust -E UTF8
-"port=5434" | Add-Content $env:TEMP\pgdata\postgresql.conf
-"listen_addresses='127.0.0.1'" | Add-Content $env:TEMP\pgdata\postgresql.conf
-& "$pgbin\pg_ctl.exe" -D $env:TEMP\pgdata -l $env:TEMP\pgdata.log start
+```
+                          ┌───────────────────────────┐
+                          │   GitHub Repository       │
+                          │   (monorepo layout)       │
+                          └─────────────┬─────────────┘
+                                        │
+                 ┌──────────────────────┴──────────────────────┐
+                 ▼                                             ▼
+┌─────────────────────────────────┐           ┌─────────────────────────────────┐
+│       Project 1: Backend        │           │       Project 2: Frontend       │
+│  - Root Directory: backend/     │           │  - Root Directory: frontend/    │
+│  - Framework: Other (FastAPI)   │           │  - Framework: Next.js           │
+│  - Entrypoint: app/main.py      │           │  - Server-side API Proxy        │
+└────────────────┬────────────────┘           └────────────────┬────────────────┘
+                 │                                             │
+                 │   X-API-Key Proxy Traffic                   │
+                 │◄────────────────────────────────────────────┘
+                 ▼
+┌─────────────────────────────────┐
+│      Neon Serverless Postgres   │
+│  - Pooled Connection String     │
+│  - Max Pool: 3 (serverless)     │
+└─────────────────────────────────┘
 ```
 
-create databases `zerowaste`, `zerowaste_test`, `zerowaste_e2e`, and either export
-`DATABASE_URL` / `TEST_DATABASE_URL` / `E2E_DATABASE_URL` or rely on the
-`postgresql://postgres:postgres@127.0.0.1:5434/<db>` defaults. Prefer a real
-system Postgres 16+ for daily use; the pip binaries are a zero-install fallback
-(the 5433 data dir in this repo hit a Windows shared-memory crash loop, while a
-fresh cluster on 5434 is healthy — if your server wedges, re-initdb somewhere new).
+---
 
-## Status
+## Step 1: Database Provisioning (Neon PostgreSQL)
 
-Not deployed as of 2026-10-10. No live URL is claimed. After deploying, replace
-`[INSERT DEPLOYED URL]` in SLIDES.md only with a URL you opened and clicked through.
+1. Log into your [Neon Console](https://console.neon.tech/) or navigate to the **Storage** tab in your Vercel Dashboard and select **Neon Postgres**.
+2. Create a new database project named `zerowaste-prod`.
+3. In the connection details, select **Pooled connection** (port `6543` or `-pooler` hostname) to prevent serverless connection exhaustion.
+4. Copy the connection URI:
+   ```text
+   postgresql://[user]:[password]@[neon-pooler-hostname]/zerowaste-prod?sslmode=require
+   ```
+
+---
+
+## Step 2: Deploy Project 1 — FastAPI Backend
+
+1. In the [Vercel Dashboard](https://vercel.com/), click **Add New...** > **Project**.
+2. Select your repository.
+3. Configure Project Settings:
+   - **Project Name**: `zerowaste-ai-api`
+   - **Framework Preset**: `Other`
+   - **Root Directory**: Click *Edit* and select `backend`.
+4. Configure Environment Variables:
+   | Variable Name | Value | Purpose |
+   | :--- | :--- | :--- |
+   | `DATABASE_URL` | Neon pooled connection string | Connects to PostgreSQL database |
+   | `API_KEY` | Long random secret string (e.g., 32+ characters) | Enforces fail-closed API security |
+   | `ADMIN_TOKEN` | Separate long random string | Protects `/api/admin/reset` and `/reseed` |
+   | `PRODUCTION` | `1` | Enables production security mode |
+   | `FRONTEND_ORIGIN` | `https://your-frontend-project.vercel.app` (or `*`) | CORS origin allowance |
+   | `DEMO_MODE` | *Leave Unset* | **Critical**: Backend refuses to start if `DEMO_MODE=True` in production |
+5. In `backend/vercel.json`, verify function timeout and build configuration:
+   ```json
+   {
+     "$schema": "https://openapi.vercel.sh/vercel.json",
+     "builds": [
+       {
+         "src": "app/main.py",
+         "use": "@vercel/python",
+         "config": {
+           "maxDuration": 30
+         }
+       }
+     ],
+     "routes": [
+       {
+         "src": "/(.*)",
+         "dest": "app/main.py"
+       }
+     ],
+     "excludeFiles": [
+       "tests/**",
+       "pytest.ini",
+       ".pytest_cache/**"
+     ]
+   }
+   ```
+6. Click **Deploy**.
+7. Once deployed, test the health check endpoint:
+   ```bash
+   curl -s https://zerowaste-ai-api.vercel.app/api/health
+   ```
+   Expected response:
+   ```json
+   {
+     "status": "healthy",
+     "service": "zerowaste-ai-backend",
+     "database_connected": true,
+     "demo_mode": false,
+     "is_production": true,
+     "as_of_date": "2026-10-12"
+   }
+   ```
+
+---
+
+## Step 3: Deploy Project 2 — Next.js Frontend
+
+1. In the Vercel Dashboard, click **Add New...** > **Project**.
+2. Select the **same** repository again.
+3. Configure Project Settings:
+   - **Project Name**: `zerowaste-ai`
+   - **Framework Preset**: `Next.js`
+   - **Root Directory**: Click *Edit* and select `frontend`.
+4. Configure Environment Variables:
+   | Variable Name | Value | Purpose |
+   | :--- | :--- | :--- |
+   | `ZEROWASTE_API_BASE` | `https://zerowaste-ai-api.vercel.app` | URL of deployed FastAPI backend |
+   | `ZEROWASTE_API_KEY` | *Same secret string as backend `API_KEY`* | Server proxy authenticates to backend |
+   | `ADMIN_TOKEN` | *Same secret string as backend `ADMIN_TOKEN`* | Allows admin actions through proxy |
+   *Notice: Zero `NEXT_PUBLIC_` secrets are defined. All credentials remain on the server side.*
+5. Click **Deploy**.
+
+---
+
+## Step 4: Verification & Function Duration Verification
+
+1. **Verify Backend Connectivity**: Open `https://your-frontend-project.vercel.app` and confirm all stat chips load without errors.
+2. **Check Function Duration Limits**:
+   - Go to your Vercel Project Dashboard > **Settings** > **Functions**.
+   - Review your plan's maximum execution duration (Hobby plans default to 10s or 15s, Pro plans allow up to 60s/300s).
+   - Ensure the backend configuration (`maxDuration: 30`) aligns with your plan tier.
+3. **Verify Database Seeding**:
+   - On first startup against an empty Neon database, the backend automatically runs `apply_schema()` and `seed_database()` idempotently.
+   - If reseeding is needed manually, execute:
+     ```bash
+     curl -X POST https://your-frontend-project.vercel.app/api/admin/reseed \
+       -H "X-Admin-Token: your_admin_token"
+     ```
+
+---
+
+## Troubleshooting & Common Pitfalls
+
+| Symptom | Cause | Solution |
+| :--- | :--- | :--- |
+| Backend crashes on boot with `FAIL-CLOSED SECURITY` | `API_KEY` is empty or `DEMO_MODE=True` was set in production | Ensure `PRODUCTION=1`, leave `DEMO_MODE` unset, and supply a long random `API_KEY`. |
+| Database connection timeouts | Raw connection used instead of pooled connection | Change connection string host to the Neon `-pooler` endpoint. |
+| Client requests return 401 Unauthorized | Frontend `ZEROWASTE_API_KEY` does not match backend `API_KEY` | Ensure both environment variables share the identical random secret. |

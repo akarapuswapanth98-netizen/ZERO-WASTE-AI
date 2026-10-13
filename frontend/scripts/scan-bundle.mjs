@@ -1,37 +1,65 @@
-// Fails if a canary secret appears in the built CLIENT bundle (.next/static).
-// Server chunks (.next/server) legitimately contain server-only env values.
-// Usage:
-//   ZEROWASTE_API_KEY=<canary> npm run build
-//   node scripts/scan-bundle.mjs <canary>   (or: npm run scan:secrets -- <canary>)
-import { readdirSync, readFileSync, statSync } from "node:fs";
-import { join } from "node:path";
+#!/usr/bin/env node
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
 
-const [canary] = process.argv.slice(2);
-if (!canary) {
-  console.error("usage: node scripts/scan-bundle.mjs <canary-secret>");
-  process.exit(2);
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const CANARY_PATTERNS = [
+  "CANARY_KEY_9f3a",
+  "CANARY_ADMIN_7c1d",
+];
+
+const staticDir = path.resolve(__dirname, "../.next/static");
+
+console.log("=================================================");
+console.log("ZeroWaste AI Secret Canary Scanner");
+console.log(`Scanning client bundle directory: ${staticDir}`);
+console.log("=================================================");
+
+if (!fs.existsSync(staticDir)) {
+  console.error("ERROR: .next/static directory does not exist. Run 'npm run build' first.");
+  process.exit(1);
 }
-const hits = [];
-function walk(dir) {
-  let entries;
-  try {
-    entries = readdirSync(dir);
-  } catch {
-    console.error(`missing build output: ${dir} (run a production build first)`);
-    process.exit(2);
-  }
-  for (const f of entries) {
-    const p = join(dir, f);
-    if (statSync(p).isDirectory()) {
-      walk(p);
-    } else if (/\.(js|css|map)$/.test(f) && readFileSync(p, "utf8").includes(canary)) {
-      hits.push(p);
+
+let violations = [];
+
+function scanDirectory(dir) {
+  const entries = fs.readdirSync(dir, { withFileTypes: true });
+
+  for (const entry of entries) {
+    const fullPath = path.join(dir, entry.name);
+
+    if (entry.isDirectory()) {
+      scanDirectory(fullPath);
+    } else if (entry.isFile() && (entry.name.endsWith(".js") || entry.name.endsWith(".json") || entry.name.endsWith(".css") || entry.name.endsWith(".html"))) {
+      try {
+        const content = fs.readFileSync(fullPath, "utf-8");
+        for (const pattern of CANARY_PATTERNS) {
+          if (content.includes(pattern)) {
+            violations.push({
+              file: path.relative(path.resolve(__dirname, ".."), fullPath),
+              pattern: pattern,
+            });
+          }
+        }
+      } catch (err) {
+        console.warn(`Could not read file ${fullPath}:`, err.message);
+      }
     }
   }
 }
-walk(".next/static");
-if (hits.length > 0) {
-  console.error(`SECRET LEAK: canary found in client bundle:\n${hits.join("\n")}`);
+
+scanDirectory(staticDir);
+
+if (violations.length > 0) {
+  console.error("\n❌ CRITICAL SECURITY VIOLATION: Canary secret detected in public client bundle!");
+  for (const v of violations) {
+    console.error(` - Found '${v.pattern}' in ${v.file}`);
+  }
   process.exit(1);
+} else {
+  console.log("\n✅ SECRET CANARY SCAN PASSED: Zero canary secret values found under .next/static.");
+  process.exit(0);
 }
-console.log("scan clean: canary absent from .next/static client bundle");

@@ -1,49 +1,78 @@
-"""Pytest guardrails: tests run ONLY against TEST_DATABASE_URL (a dedicated
-Postgres database) and never touch the demo database.
-
-Required environment (do NOT put these in .env files):
-  TEST_DATABASE_URL=postgresql://.../zerowaste_test   (local default below)
-  AS_OF=2026-10-05                                    (deterministic reset dates)
-"""
+"""Pytest configuration and test isolation fixtures for ZeroWaste AI."""
 import os
-import sys
-import urllib.parse
+from typing import Generator
+import pytest
+from fastapi.testclient import TestClient
+from urllib.parse import urlparse
 
-os.environ.setdefault("DEMO_MODE", "true")
-os.environ.setdefault("AS_OF", "2026-10-05")
-os.environ.setdefault(
-    "TEST_DATABASE_URL",
-    "postgresql://postgres:postgres@127.0.0.1:5434/zerowaste_test",
-)
+# Ensure test runs against zerowaste_test ONLY
+TEST_DB_URL = "postgresql://postgres@localhost:5433/zerowaste_test"
+os.environ["DATABASE_URL"] = TEST_DB_URL
+os.environ["API_KEY"] = "test_secret_key_8f7b"
+os.environ["ADMIN_TOKEN"] = "test_admin_token_4c2d"
+os.environ["DEMO_MODE"] = "False"
+os.environ["AS_OF_DATE"] = "2026-10-12"
 
-from app import config as _config  # noqa: E402  (env must be set before app import)
+# Remove production flags if set in local env
+os.environ.pop("PRODUCTION", None)
+os.environ.pop("VERCEL", None)
+
+from app.config import get_settings, reset_settings_cache
+from app.database import close_pool, get_pool
+from app.main import app
+from app.schema import reset_schema
+from app.seed import seed_database
 
 
-def _db_name(url: str) -> str:
-    return urllib.parse.urlparse(url or "").path.lstrip("/")
-
-
-def pytest_configure():
-    demo = _db_name(_config.DATABASE_URL)
-    test = _db_name(_config.TEST_DATABASE_URL)
-    assert test, "TEST_DATABASE_URL is not set — refusing to run (would risk the demo DB)."
-    assert demo, "DATABASE_URL is not set."
-    assert test != demo, (
-        f"TEST_DATABASE_URL ({test}) must differ from the demo database ({demo})."
+def verify_test_database_safety(db_url: str) -> None:
+    """Enforce strict rule: Test suite refuses to run if pointed at demo, dev, or production DB."""
+    parsed = urlparse(db_url)
+    db_name = parsed.path.lstrip("/")
+    
+    assert db_name == "zerowaste_test", (
+        f"CRITICAL SAFETY VIOLATION: Test suite attempted to run against database '{db_name}'. "
+        "Tests must run ONLY against 'zerowaste_test'."
     )
-    # fail fast with setup help if Postgres is unreachable
-    import psycopg
-    try:
-        c = psycopg.connect(_config.TEST_DATABASE_URL, connect_timeout=8)
-        c.close()
-    except Exception as e:
-        raise RuntimeError(
-            "Cannot reach the Postgres test database at "
-            f"{_config.TEST_DATABASE_URL}. Start local Postgres 16+ with databases "
-            "'zerowaste', 'zerowaste_test', 'zerowaste_e2e' (see README), "
-            f"or set TEST_DATABASE_URL. Cause: {e}"
+    
+    forbidden = ["demo", "prod", "zerowaste_dev", "production"]
+    for word in forbidden:
+        assert word not in db_name.lower(), (
+            f"CRITICAL SAFETY VIOLATION: Database name '{db_name}' contains forbidden pattern '{word}'."
         )
-    # point the whole app at the test database (get_conn reads this live)
-    _config.DATABASE_URL = _config.TEST_DATABASE_URL
-    from app import database as _db
-    _db.reset_pool()
+
+
+@pytest.fixture(scope="session", autouse=True)
+def setup_test_database():
+    """Verify test safety, initialize schema, and seed test database once for the session."""
+    reset_settings_cache()
+    settings = get_settings()
+    verify_test_database_safety(settings.DATABASE_URL)
+
+    # Initialize connection pool and seed test db
+    close_pool()
+    get_pool(TEST_DB_URL)
+    reset_schema(TEST_DB_URL)
+    seed_database(database_url=TEST_DB_URL, seed=42, force_reset=True)
+
+    yield
+
+    close_pool()
+
+
+@pytest.fixture
+def client() -> Generator[TestClient, None, None]:
+    """TestClient configured with valid test API key."""
+    with TestClient(app) as test_client:
+        test_client.headers.update({"X-API-Key": "test_secret_key_8f7b"})
+        yield test_client
+
+
+@pytest.fixture
+def admin_client() -> Generator[TestClient, None, None]:
+    """TestClient configured with valid test API key and Admin token."""
+    with TestClient(app) as test_client:
+        test_client.headers.update({
+            "X-API-Key": "test_secret_key_8f7b",
+            "X-Admin-Token": "test_admin_token_4c2d",
+        })
+        yield test_client

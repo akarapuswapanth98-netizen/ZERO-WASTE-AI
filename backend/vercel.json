@@ -1,9 +1,23 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "functions": {
-    "app/main.py": {
-      "maxDuration": 60,
-      "excludeFiles": "tests/**"
+  "builds": [
+    {
+      "src": "app/main.py",
+      "use": "@vercel/python",
+      "config": {
+        "maxDuration": 30
+      }
     }
-  }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "app/main.py"
+    }
+  ],
+  "excludeFiles": [
+    "tests/**",
+    "pytest.ini",
+    ".pytest_cache/**"
+  ]
 }

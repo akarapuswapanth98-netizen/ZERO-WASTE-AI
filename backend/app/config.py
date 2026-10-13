@@ -1,45 +1,77 @@
-"""Central config: env-driven, fail-closed auth, no secrets in code.
+"""Configuration and fail-closed authentication rules for ZeroWaste AI."""
+from datetime import date
+from typing import Optional
+from pydantic import model_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
-Demo mode is opt-in (DEMO_MODE=true, local only). Anything else requires a
-real API_KEY; production/VERCEL + DEMO_MODE=true refuses to start.
-Database is Postgres via DATABASE_URL, with a zero-setup SQLite fallback:
-DATABASE_URL=sqlite:////tmp/zerowaste.db (or, on Vercel, an unset/localhost
-URL auto-falls-back to that path — see app/database._effective_url).
-Tests MUST use TEST_DATABASE_URL; see backend/tests/conftest.py.
-"""
-from __future__ import annotations
-import os
-from dotenv import load_dotenv
+FORBIDDEN_DEFAULT_KEYS = {
+    "",
+    "changeme",
+    "secret",
+    "default",
+    "123456",
+    "apikey",
+    "admin",
+    "test",
+}
 
-load_dotenv()
 
-DEMO_MODE = os.getenv("DEMO_MODE", "false").lower() == "true"
-API_KEY = os.getenv("API_KEY", "")
-PRODUCTION = os.getenv("PRODUCTION", "0") == "1"
-_ON_VERCEL = bool(os.getenv("VERCEL"))
-
-DEFAULT_API_KEY = "demo-key-123"
-if (PRODUCTION or _ON_VERCEL) and DEMO_MODE:
-    raise RuntimeError(
-        "Refusing to start: DEMO_MODE=true is not allowed when PRODUCTION=1 "
-        "or running on Vercel. Set DEMO_MODE=false (and a real API_KEY)."
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=None,  # Do not read .env file directly to maintain workspace security rules
+        extra="ignore",
     )
-if not DEMO_MODE and (not API_KEY or API_KEY == DEFAULT_API_KEY):
-    raise RuntimeError(
-        "Refusing to start: set a real API_KEY environment variable when "
-        "DEMO_MODE is false; the default 'demo-key-123' is public. "
-        "Local demos opt in with DEMO_MODE=true."
-    )
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@127.0.0.1:5434/zerowaste")
-TEST_DATABASE_URL = os.getenv("TEST_DATABASE_URL", "postgresql://postgres:postgres@127.0.0.1:5434/zerowaste_test")
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
 
-# Comma-separated browser origins. Never "*" — the proxy/keys must not be callable
-# from arbitrary sites. Local dev needs both localhost and 127.0.0.1 forms.
-_front = os.getenv("FRONTEND_ORIGIN", "http://localhost:3000,http://127.0.0.1:3000")
-CORS_ORIGINS = [o.strip() for o in _front.split(",") if o.strip()]
-assert all(o != "*" for o in CORS_ORIGINS), "FRONTEND_ORIGIN must never be '*'"
+    DATABASE_URL: str = "postgresql://postgres@localhost:5433/zerowaste_dev"
+    API_KEY: Optional[str] = None
+    ADMIN_TOKEN: Optional[str] = None
+    DEMO_MODE: bool = False
+    PRODUCTION: Optional[str] = None
+    VERCEL: Optional[str] = None
+    AS_OF_DATE: str = "2026-10-12"
+    FRONTEND_ORIGIN: str = "http://localhost:3000"
 
-SEED = 42
-AUTO_SEED = os.getenv("AUTO_SEED", "true").lower() == "true"
+    @property
+    def is_production(self) -> bool:
+        return self.PRODUCTION == "1" or self.VERCEL is not None
+
+    @property
+    def as_of_date_obj(self) -> date:
+        return date.fromisoformat(self.AS_OF_DATE)
+
+    @model_validator(mode="after")
+    def validate_fail_closed_security(self) -> "Settings":
+        is_prod = self.is_production
+
+        # Rule: Refuse DEMO_MODE=True when PRODUCTION=1 or VERCEL is set
+        if is_prod and self.DEMO_MODE:
+            raise RuntimeError(
+                "FAIL-CLOSED SECURITY: DEMO_MODE cannot be enabled when PRODUCTION=1 or VERCEL is set."
+            )
+
+        # Rule: When DEMO_MODE is False, API_KEY must be set and not a known placeholder/default
+        if not self.DEMO_MODE:
+            if not self.API_KEY or self.API_KEY.strip().lower() in FORBIDDEN_DEFAULT_KEYS:
+                raise RuntimeError(
+                    "FAIL-CLOSED SECURITY: Backend refuses to start because DEMO_MODE is False "
+                    "and API_KEY is unset, empty, or a known default/placeholder value."
+                )
+
+        return self
+
+
+# Global singleton settings factory
+_settings: Optional[Settings] = None
+
+
+def get_settings() -> Settings:
+    global _settings
+    if _settings is None:
+        _settings = Settings()
+    return _settings
+
+
+def reset_settings_cache() -> None:
+    """Helper for testing configuration permutations."""
+    global _settings
+    _settings = None

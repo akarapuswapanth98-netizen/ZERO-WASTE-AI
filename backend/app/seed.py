@@ -1,229 +1,255 @@
-"""Reproducible synthetic seed (seed=42). 5 stores, 18 SKUs, 6 categories,
-12 weeks of daily sales with weekday/payday/weather effects, 2-4 batches each,
-plus seeded demo history (agent runs + one scenario set) so Evaluation/Audit
-are non-empty on first load."""
-from __future__ import annotations
-import os
+"""Deterministic, reproducible seed data generator (Seed 42) for ZeroWaste AI."""
 from datetime import date, timedelta
+import random
+from typing import Dict, List, Optional, Tuple
 import numpy as np
-from . import database as db
+from app.config import get_settings
+from app.database import get_db_cursor
+from app.schema import apply_schema
 
-STORES = [
-    ("store_001", "Downtown Fresh", "HITAM Road", 1.00),
-    ("store_002", "Suburb Mart", "Gandipet", 0.80),
-    ("store_003", "Campus Grocer", "HITAM Campus", 1.20),
-    ("store_004", "Old City Bazaar", "Old City", 0.65),
-    ("store_005", "Hitech MiniMart", "Hitech City", 1.10),
+# 5 Defined Stores
+STORES_DATA = [
+    {"code": "STR-001", "name": "Metro Flagship", "location": "Downtown Central", "square_meters": 1200},
+    {"code": "STR-002", "name": "Suburban Fresh", "location": "North Suburbs", "square_meters": 850},
+    {"code": "STR-003", "name": "Midtown Express", "location": "Financial District", "square_meters": 450},
+    {"code": "STR-004", "name": "Westside Market", "location": "West Residential", "square_meters": 750},
+    {"code": "STR-005", "name": "Harbor Grocers", "location": "Harborfront Quay", "square_meters": 600},
 ]
 
-# sku, name, category, unit_cost, unit_price, shelf_life_days, unit_weight_kg, base_demand, lead_days, moq
-PRODUCTS = [
-    ("MILK-1L", "Whole Milk 1L", "dairy", 0.90, 1.49, 7, 1.03, 20, 1, 12),
-    ("YOG-500G", "Greek Yogurt 500g", "dairy", 1.20, 1.99, 14, 0.50, 12, 2, 12),
-    ("CHED-200G", "Cheddar 200g", "dairy", 2.00, 3.49, 30, 0.20, 6, 3, 6),
-    ("EGGS-12", "Eggs 12pk", "dairy", 1.80, 2.99, 21, 0.72, 15, 2, 12),
-    ("PANEER-200G", "Fresh Paneer 200g", "dairy", 1.50, 2.79, 4, 0.20, 9, 1, 12),
-    ("BREAD-WH", "Whole Wheat Bread", "bakery", 0.80, 1.99, 5, 0.40, 18, 1, 12),
-    ("CROIS-4PK", "Butter Croissant 4pk", "bakery", 1.10, 2.99, 3, 0.32, 10, 1, 12),
-    ("BUN-6PK", "Burger Buns 6pk", "bakery", 0.90, 2.29, 6, 0.36, 11, 1, 12),
-    ("TOM-500G", "Cherry Tomatoes 500g", "produce", 0.70, 1.79, 6, 0.50, 14, 1, 12),
-    ("SPIN-200G", "Baby Spinach 200g", "produce", 0.90, 2.49, 5, 0.20, 9, 1, 12),
-    ("BAN-1KG", "Bananas 1kg", "produce", 0.60, 1.29, 7, 1.00, 22, 1, 12),
-    ("AVOC-2PK", "Avocado 2pk", "produce", 1.40, 2.99, 5, 0.40, 8, 2, 6),
-    ("CHKN-500G", "Chicken Breast 500g", "meat", 3.00, 5.99, 4, 0.50, 11, 2, 6),
-    ("SALM-300G", "Salmon Fillet 300g", "seafood", 4.50, 8.99, 3, 0.30, 7, 2, 6),
-    ("FISH-400G", "Rohu Fish 400g", "seafood", 3.20, 6.49, 3, 0.40, 6, 1, 6),
-    ("VEG-BIRY", "Veg Biryani 350g", "ready-to-eat", 1.80, 3.49, 3, 0.35, 13, 1, 12),
-    ("CHKN-WRAP", "Chicken Wrap", "ready-to-eat", 2.20, 4.29, 3, 0.28, 10, 1, 12),
-    ("FRUIT-CUP", "Fruit Cup 250g", "ready-to-eat", 1.00, 2.19, 4, 0.25, 8, 1, 12),
+# 18 Defined Perishable SKUs across 6 Categories
+PRODUCTS_DATA = [
+    # Dairy (shelf life 7 - 14 days)
+    {"sku": "DAI-001", "name": "Organic Whole Milk 1L", "category": "dairy", "unit_cost": 1.20, "price": 2.49, "shelf_life_days": 10, "unit_weight_kg": 1.030, "lead_time": 1, "moq": 20},
+    {"sku": "DAI-002", "name": "Greek Yogurt Plain 500g", "category": "dairy", "unit_cost": 1.80, "price": 3.99, "shelf_life_days": 14, "unit_weight_kg": 0.520, "lead_time": 2, "moq": 15},
+    {"sku": "DAI-003", "name": "Artisan Farm Cheddar 250g", "category": "dairy", "unit_cost": 2.90, "price": 5.49, "shelf_life_days": 21, "unit_weight_kg": 0.260, "lead_time": 2, "moq": 10},
+    # Bakery (shelf life 3 - 5 days)
+    {"sku": "BAK-001", "name": "Artisan Sourdough Boule", "category": "bakery", "unit_cost": 1.10, "price": 3.49, "shelf_life_days": 3, "unit_weight_kg": 0.500, "lead_time": 1, "moq": 12},
+    {"sku": "BAK-002", "name": "Butter Croissant 4-Pack", "category": "bakery", "unit_cost": 1.60, "price": 4.29, "shelf_life_days": 4, "unit_weight_kg": 0.280, "lead_time": 1, "moq": 10},
+    {"sku": "BAK-003", "name": "Brioche Burger Buns 4-Pk", "category": "bakery", "unit_cost": 1.30, "price": 3.79, "shelf_life_days": 5, "unit_weight_kg": 0.350, "lead_time": 1, "moq": 15},
+    # Produce (shelf life 4 - 8 days)
+    {"sku": "PRO-001", "name": "Organic Strawberries 250g", "category": "produce", "unit_cost": 1.70, "price": 3.99, "shelf_life_days": 4, "unit_weight_kg": 0.260, "lead_time": 1, "moq": 16},
+    {"sku": "PRO-002", "name": "Baby Spinach Clamshell 200g", "category": "produce", "unit_cost": 1.25, "price": 2.99, "shelf_life_days": 6, "unit_weight_kg": 0.220, "lead_time": 1, "moq": 20},
+    {"sku": "PRO-003", "name": "Hass Avocados 4-Pack", "category": "produce", "unit_cost": 2.10, "price": 4.99, "shelf_life_days": 7, "unit_weight_kg": 0.600, "lead_time": 2, "moq": 12},
+    # Meat (shelf life 4 - 7 days)
+    {"sku": "MEA-001", "name": "Free-Range Chicken Breast 500g", "category": "meat", "unit_cost": 3.80, "price": 7.49, "shelf_life_days": 5, "unit_weight_kg": 0.520, "lead_time": 1, "moq": 10},
+    {"sku": "MEA-002", "name": "Grass-Fed Ribeye Steak 300g", "category": "meat", "unit_cost": 6.50, "price": 12.99, "shelf_life_days": 6, "unit_weight_kg": 0.320, "lead_time": 2, "moq": 8},
+    {"sku": "MEA-003", "name": "Lean Ground Beef 450g", "category": "meat", "unit_cost": 3.20, "price": 6.29, "shelf_life_days": 5, "unit_weight_kg": 0.460, "lead_time": 1, "moq": 12},
+    # Seafood (shelf life 3 - 5 days)
+    {"sku": "SEA-001", "name": "Atlantic Salmon Fillet 400g", "category": "seafood", "unit_cost": 5.20, "price": 10.99, "shelf_life_days": 4, "unit_weight_kg": 0.420, "lead_time": 1, "moq": 8},
+    {"sku": "SEA-002", "name": "Wild Tiger Prawns 300g", "category": "seafood", "unit_cost": 4.80, "price": 9.99, "shelf_life_days": 4, "unit_weight_kg": 0.320, "lead_time": 2, "moq": 8},
+    {"sku": "SEA-003", "name": "Fresh Sea Bass Portions 350g", "category": "seafood", "unit_cost": 4.50, "price": 9.49, "shelf_life_days": 5, "unit_weight_kg": 0.360, "lead_time": 2, "moq": 6},
+    # Ready-to-eat (shelf life 2 - 4 days)
+    {"sku": "RTE-001", "name": "Chicken Caesar Salad 350g", "category": "ready-to-eat", "unit_cost": 2.60, "price": 5.99, "shelf_life_days": 3, "unit_weight_kg": 0.360, "lead_time": 1, "moq": 10},
+    {"sku": "RTE-002", "name": "Sushi Bento Box 320g", "category": "ready-to-eat", "unit_cost": 4.10, "price": 8.99, "shelf_life_days": 2, "unit_weight_kg": 0.340, "lead_time": 1, "moq": 8},
+    {"sku": "RTE-003", "name": "Artisan Club Wrap 280g", "category": "ready-to-eat", "unit_cost": 2.20, "price": 5.49, "shelf_life_days": 3, "unit_weight_kg": 0.290, "lead_time": 1, "moq": 12},
 ]
 
-WEEKS = 12
-NDAYS = WEEKS * 7
 
-def _asof() -> date:
-    """Reset date: AS_OF override (tests) or today. Seed randomness still uses seed=42."""
-    return date.fromisoformat(os.getenv("AS_OF", date.today().isoformat()))
-
-def _bounds() -> tuple[date, date]:
-    asof = _asof()
-    return asof - timedelta(days=NDAYS), asof  # sales: [start, asof) then batches at asof
-
-STORE_MULT = {s[0]: s[3] for s in STORES}
-BASE_MAP = {p[0]: p[7] for p in PRODUCTS}
-CAT_MAP = {p[0]: p[2] for p in PRODUCTS}
-PRICE_MAP = {p[0]: p[4] for p in PRODUCTS}
-COST_MAP = {p[0]: p[3] for p in PRODUCTS}
-
-def weekday_factor(d: date, category: str, store_id: str) -> float:
-    wd = d.weekday()
-    f = 1.0
-    if category in ("bakery", "produce"):
-        if wd in (5, 6):
-            f *= 1.25
-        if wd == 0:
-            f *= 0.90
-    if category == "meat" and wd in (5, 6):
-        f *= 1.15
-    if category == "ready-to-eat":
-        if wd in (1, 2, 3) and store_id == "store_005":
-            f *= 1.30  # weekday lunch peak near offices
-        if wd in (5, 6):
-            f *= 1.15
-    if store_id == "store_004" and wd in (5, 6):
-        f *= 1.20  # bazaar weekend rush
-    # payday bump on 1st and 15th for premium categories
-    if d.day in (1, 15) and category in ("meat", "seafood", "ready-to-eat"):
-        f *= 1.20
-    return f
-
-def seed_core(seed: int = 42) -> dict:
-    """Fast core seed: schema + stores/products/sales/batches only, batched inserts.
-    Safe for serverless cold starts (no agent runs, no scenarios). Idempotent."""
+def seed_database(
+    database_url: Optional[str] = None,
+    seed: int = 42,
+    as_of_date_str: Optional[str] = None,
+    force_reset: bool = False,
+) -> Dict[str, int]:
+    """Populate database with deterministic synthetic data (Seed 42)."""
+    apply_schema(database_url)
+    as_of = date.fromisoformat(as_of_date_str or get_settings().AS_OF_DATE)
     rng = np.random.default_rng(seed)
-    db.init_db()
-    start, today = _bounds()
-    db.set_meta("asof", today.isoformat())
-    conn = db.get_conn()
-    for t in ["planner_decisions", "recommendations", "agent_runs", "sales_history",
-              "inventory_batches", "products", "stores", "sim_system_events",
-              "scenario_runs", "audit_logs"]:
-        conn.execute(f"DELETE FROM {t}")
-    db.executemany("INSERT INTO stores VALUES (%s,%s,%s)",
-                     [(sid, name, loc) for sid, name, loc, _ in STORES])
-    db.executemany("INSERT INTO products VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)",
-                     [(sku, name, cat, cost, price, shelf, wt, lead, moq)
-                      for sku, name, cat, cost, price, shelf, wt, _, lead, moq in PRODUCTS])
-    # weather-like smooth multiplier per store (random walk 0.85..1.15)
-    weather = {}
-    for sid, _, _, _ in STORES:
-        walk = [1.0]
-        for _ in range(NDAYS - 1):
-            walk.append(float(np.clip(walk[-1] + rng.normal(0, 0.02), 0.85, 1.15)))
-        weather[sid] = walk
-    sales_rows = []
-    for sid, _, _, _ in STORES:
-        for sku in BASE_MAP:
-            base = BASE_MAP[sku] * STORE_MULT[sid]
-            for i in range(NDAYS):
-                d = start + timedelta(days=i)
-                mu = base * weekday_factor(d, CAT_MAP[sku], sid) * weather[sid][i]
-                promo = 1 if (CAT_MAP[sku] in ("bakery", "produce") and i % 14 == 9) else 0
-                if promo:
-                    mu *= 1.35
-                units = int(max(0, round(rng.normal(mu, mu * 0.15))))
-                sales_rows.append((sid, sku, d.isoformat(), units,
-                                    round(PRICE_MAP[sku] * (0.8 if promo else 1.0), 2), promo))
-    db.executemany(
-        "INSERT INTO sales_history (store_id,sku,date,units_sold,unit_price,promo) VALUES (%s,%s,%s,%s,%s,%s)",
-        sales_rows)
-    # inventory batches: 2-4 per store/SKU with deliberate imbalances
-    batch_rows = []
-    for sid, _, _, _ in STORES:
-        for sku, _, _, cost, _, shelf, _, base, _, _ in PRODUCTS:
-            avg = base * STORE_MULT[sid]
-            near_days = {"CROIS-4PK": 1, "SALM-300G": 1, "FISH-400G": 1, "VEG-BIRY": 1,
-                         "CHKN-WRAP": 1, "CHKN-500G": 2, "BREAD-WH": 2, "SPIN-200G": 2,
-                         "PANEER-200G": 2, "FRUIT-CUP": 2}.get(sku, 3)
-            mult_near, mult_mid, mult_far = 1.0, 1.0, 1.0
-            if sid == "store_001" and sku in ("BREAD-WH", "MILK-1L"):
-                mult_near, mult_far = 2.2, 1.5
-            if sid == "store_002" and sku == "BREAD-WH":
-                mult_near, mult_far = 0.25, 0.25
-            if sid == "store_002" and sku == "SPIN-200G":
-                mult_near, mult_far = 2.0, 1.4
-            if sid == "store_003" and sku == "BAN-1KG":
-                mult_near, mult_far = 2.0, 1.6
-            if sid == "store_003" and sku == "SALM-300G":
-                mult_near, mult_far = 0.4, 0.5
-            if sid == "store_004" and CAT_MAP[sku] == "bakery":
-                mult_near, mult_mid, mult_far = 2.1, 1.5, 1.2
-            if sid == "store_004" and CAT_MAP[sku] == "seafood":
-                mult_near, mult_far = 0.35, 0.4
-            if sid == "store_005" and CAT_MAP[sku] == "ready-to-eat":
-                mult_near, mult_mid, mult_far = 1.9, 1.3, 1.0
-            if sid == "store_005" and sku == "MILK-1L":
-                mult_near, mult_far = 0.5, 0.6
-            q_near = int(max(1, round(avg * near_days * 0.9 * mult_near) + rng.integers(-2, 3)))
-            q_far = int(max(1, round(avg * max(1, shelf - near_days) * 0.55 * mult_far) + rng.integers(-2, 3)))
-            specs = [
-                (f"{sid}-{sku}-A", q_near, today - timedelta(days=max(0, shelf - near_days - 1)),
-                 today + timedelta(days=near_days)),
-                (f"{sid}-{sku}-B", q_far, today - timedelta(days=1),
-                 today + timedelta(days=shelf - 1)),
-            ]
-            if shelf >= 5 and rng.random() < 0.6:  # mid batch for longer shelf lives
-                q_mid = int(max(1, round(avg * 2 * mult_mid)))
-                specs.append((f"{sid}-{sku}-C", q_mid, today - timedelta(days=2),
-                              today + timedelta(days=max(near_days + 1, shelf // 2))))
-            for bid, q, recv, exp in specs:
-                q = max(0, q)
-                batch_rows.append((bid, sid, sku, q + int(rng.integers(0, 4)), q,
-                                   recv.isoformat(), exp.isoformat(), cost))
-    db.executemany("INSERT INTO inventory_batches VALUES (%s,%s,%s,%s,%s,%s,%s,%s)", batch_rows)
-    conn.commit()
-    counts = {}
-    for t in ["stores", "products", "sales_history", "inventory_batches"]:
-        counts[t] = conn.execute(f"SELECT COUNT(*) c FROM {t}").fetchone()["c"]
-    db.release(conn)
-    db.log_event("seed", "seed_completed",
-                 {"seed": seed, "counts": counts, "seeded_demo_history": False})
-    db.audit("system", "seed", "database", "all", {"seed": seed, **counts})
-    return {"seed": seed, "counts": counts, "synthetic": True, "asof": today.isoformat(),
-            "note": "Synthetic demo data, seed=42 reproducible. Dates relative to reset date."}
 
+    with get_db_cursor(database_url) as cur:
+        if force_reset:
+            cur.execute("TRUNCATE planner_decisions, recommendations, agent_runs, inventory_batches, sales_history, products, stores, sim_system_events, scenario_runs, audit_logs CASCADE;")
+        else:
+            cur.execute("SELECT COUNT(*) FROM stores;")
+            if cur.fetchone()[0] >= 5:
+                # Already seeded
+                return {"status": "already_seeded"}
 
-def seed_all(seed: int = 42, with_history: bool = True) -> dict:
-    """Full reset: fast core seed plus demo history (proposals, decisions, scenario)."""
-    out = seed_core(seed)
-    if with_history:
-        _seed_demo_history(seed)
-        out = {**out, "seeded_demo_history": True}
-    return out
+        # 1. Insert Stores
+        store_records = []
+        for s in STORES_DATA:
+            cur.execute(
+                """
+                INSERT INTO stores (code, name, location, square_meters)
+                VALUES (%s, %s, %s, %s)
+                ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name
+                RETURNING id, code;
+                """,
+                (s["code"], s["name"], s["location"], s["square_meters"]),
+            )
+            store_records.append(cur.fetchone())
+        store_map = {row[1]: row[0] for row in store_records}
 
-def _seed_demo_history(seed: int) -> None:
-    """A few proposals + decisions + one scenario set, marked as seeded demo history."""
-    from .coordinator import run_coordinator
-    from . import scenarios as sc
-    # full cover: one proposal per (store, SKU) so the Planner queue is complete on first load
-    skus = [p[0] for p in PRODUCTS]
-    targets = [(s[0], sku) for s in STORES for sku in skus]
-    rec_ids: list[str] = []
-    rec_pairs: list[tuple[str, str]] = []
-    for sid, sku in targets:
-        try:
-            rec_ids.append(run_coordinator(sid, sku)["rec_id"])
-            rec_pairs.append((sid, sku))
-        except Exception:
-            continue
-    conn = db.get_conn()
-    try:
-        if rec_ids:
-            conn.execute("UPDATE recommendations SET status='approved' WHERE rec_id=%s", (rec_ids[0],))
-            conn.execute("INSERT INTO planner_decisions VALUES (%s,%s,%s,%s,%s,%s,%s)",
-                         (db.new_id("dec_"), rec_ids[0], "approve", None,
-                          "seeded demo history", "seed", db.now_iso()))
-            conn.execute("UPDATE recommendations SET status='executed' WHERE rec_id=%s", (rec_ids[0],))
-        if len(rec_ids) > 1:
-            conn.execute("UPDATE recommendations SET status='rejected' WHERE rec_id=%s", (rec_ids[1],))
-            conn.execute("INSERT INTO planner_decisions VALUES (%s,%s,%s,%s,%s,%s,%s)",
-                         (db.new_id("dec_"), rec_ids[1], "reject", None,
-                          "seeded demo history", "seed", db.now_iso()))
-        conn.commit()
-    finally:
-        db.release(conn)
-    # re-propose the two decided pairs so every pair still has exactly one open proposal
-    for sid, sku in rec_pairs[:2]:
-        try:
-            run_coordinator(sid, sku)
-        except Exception:
-            pass
-    if rec_ids:
-        db.log_event("seed", "execution_succeeded",
-                     {"rec_id": rec_ids[0], "seeded_demo_history": True})
-    try:
-        sc.run_scenario("excess_inventory", seeds=5, base_seed=seed)
-    except Exception:
-        pass
-    db.audit("seed", "seed_history", "database", "demo",
-             {"note": "Seeded demo history: proposals, 1 executed, 1 rejected, 1 scenario set."})
+        # 2. Insert Products
+        product_records = []
+        for p in PRODUCTS_DATA:
+            cur.execute(
+                """
+                INSERT INTO products (sku, name, category, unit_cost, price, shelf_life_days, unit_weight_kg, supplier_lead_time_days, min_order_qty)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (sku) DO UPDATE SET price = EXCLUDED.price
+                RETURNING id, sku;
+                """,
+                (
+                    p["sku"],
+                    p["name"],
+                    p["category"],
+                    p["unit_cost"],
+                    p["price"],
+                    p["shelf_life_days"],
+                    p["unit_weight_kg"],
+                    p["lead_time"],
+                    p["moq"],
+                ),
+            )
+            product_records.append(cur.fetchone())
+        product_map = {row[1]: row[0] for row in product_records}
+
+        # 3. Generate 12 weeks (84 days) of sales history per (store, product)
+        # Dates: from (as_of - 84 days) to (as_of - 1 day)
+        start_date = as_of - timedelta(days=84)
+        sales_to_insert = []
+        
+        # Store traffic multipliers (Metro Flagship highest, Midtown Express compact)
+        store_multipliers = {
+            "STR-001": 1.4,
+            "STR-002": 1.1,
+            "STR-003": 0.85,
+            "STR-004": 1.0,
+            "STR-005": 0.9,
+        }
+
+        # Product base demand per category
+        cat_base_demand = {
+            "dairy": 25.0,
+            "bakery": 20.0,
+            "produce": 22.0,
+            "meat": 14.0,
+            "seafood": 9.0,
+            "ready-to-eat": 18.0,
+        }
+
+        for s in STORES_DATA:
+            store_id = store_map[s["code"]]
+            s_mult = store_multipliers[s["code"]]
+
+            for p in PRODUCTS_DATA:
+                product_id = product_map[p["sku"]]
+                base_d = cat_base_demand[p["category"]] * s_mult
+
+                for day_idx in range(84):
+                    cur_date = start_date + timedelta(days=day_idx)
+                    weekday = cur_date.weekday()  # 0=Mon, 6=Sun
+
+                    # Day of week multiplier (surge on Fri/Sat/Sun)
+                    dow_mult = 1.0
+                    if weekday in (4, 5):  # Fri, Sat
+                        dow_mult = 1.35
+                    elif weekday == 6:  # Sun
+                        dow_mult = 1.2
+                    elif weekday == 0:  # Mon
+                        dow_mult = 0.85
+
+                    # Payday effect: 1st and 15th of each month (+25% boost)
+                    payday_mult = 1.25 if cur_date.day in (1, 15) else 1.0
+
+                    # Stochastic noise from Poisson / Gaussian
+                    expected = base_d * dow_mult * payday_mult
+                    units = int(max(0, np.round(rng.normal(expected, np.sqrt(expected) * 0.9))))
+
+                    sales_to_insert.append((
+                        store_id,
+                        product_id,
+                        cur_date,
+                        units,
+                        p["price"],
+                        False,
+                    ))
+
+        # Fast batch insert for sales history
+        cur.executemany(
+            """
+            INSERT INTO sales_history (store_id, product_id, sale_date, units_sold, unit_price, promotions_active)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            ON CONFLICT (store_id, product_id, sale_date) DO NOTHING;
+            """,
+            sales_to_insert,
+        )
+
+        # 4. Generate 2-4 Batches per (store, product) with deliberate imbalances
+        # Some expiring in 1-2 days (critical near-expiry), some fresh, some overstocked
+        batches_to_insert = []
+        batch_counter = 1000
+
+        for s in STORES_DATA:
+            store_id = store_map[s["code"]]
+            s_code = s["code"]
+
+            for p in PRODUCTS_DATA:
+                product_id = product_map[p["sku"]]
+                shelf_life = p["shelf_life_days"]
+                cost = p["unit_cost"]
+
+                # Intentional deliberate imbalances:
+                # Metro Flagship has deliberate overstock on Bakery & Ready-to-eat
+                # Midtown Express has deliberate near-expiry on Dairy & Seafood
+                # Harbor Grocers has shortage on Meat
+                is_overstock = (s_code == "STR-001" and p["category"] in ("bakery", "ready-to-eat")) or (s_code == "STR-004" and p["category"] == "produce")
+                is_near_expiry = (s_code == "STR-003" and p["category"] in ("dairy", "seafood")) or (s_code == "STR-002" and p["category"] == "meat")
+                is_shortage = (s_code == "STR-005" and p["category"] == "meat")
+
+                num_batches = 2 if is_shortage else (4 if is_overstock else 3)
+
+                for b_i in range(num_batches):
+                    batch_counter += 1
+                    batch_code = f"BAT-{batch_counter}"
+
+                    if is_near_expiry and b_i == 0:
+                        # Expiring in 1-2 days!
+                        days_left = rng.integers(1, 3)
+                        received_offset = shelf_life - days_left
+                        qty = int(rng.integers(25, 45))  # High qty expiring soon -> clear spoilage risk!
+                    elif is_overstock:
+                        days_left = rng.integers(2, shelf_life + 1)
+                        received_offset = max(1, shelf_life - days_left)
+                        qty = int(rng.integers(40, 70))  # Significant overstock
+                    elif is_shortage:
+                        days_left = rng.integers(3, shelf_life + 1)
+                        received_offset = 1
+                        qty = int(rng.integers(2, 6))  # Critical stockout danger
+                    else:
+                        days_left = rng.integers(2, shelf_life + 1)
+                        received_offset = max(1, shelf_life - days_left)
+                        qty = int(rng.integers(12, 28))
+
+                    expiry_d = as_of + timedelta(days=int(days_left))
+                    recv_d = as_of - timedelta(days=int(received_offset))
+
+                    batches_to_insert.append((
+                        store_id,
+                        product_id,
+                        batch_code,
+                        recv_d,
+                        expiry_d,
+                        qty,
+                        qty,
+                        cost,
+                    ))
+
+        # Fast batch insert for inventory batches
+        cur.executemany(
+            """
+            INSERT INTO inventory_batches (store_id, product_id, batch_code, received_date, expiry_date, initial_quantity, current_quantity, unit_cost)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (store_id, product_id, batch_code) DO NOTHING;
+            """,
+            batches_to_insert,
+        )
+
+        return {
+            "status": "seeded",
+            "stores_count": len(STORES_DATA),
+            "products_count": len(PRODUCTS_DATA),
+            "sales_records_count": len(sales_to_insert),
+            "batches_count": len(batches_to_insert),
+        }
