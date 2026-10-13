@@ -1,4 +1,4 @@
-"""Database connection management supporting PostgreSQL (psycopg 3) and SQLite fallback."""
+import atexit
 import datetime
 import os
 import sqlite3
@@ -8,6 +8,7 @@ from app.config import get_settings
 
 _pool: Any = None
 _sqlite_conn: Optional[sqlite3.Connection] = None
+
 
 
 def _effective_url(database_url: Optional[str] = None) -> str:
@@ -201,6 +202,9 @@ def close_pool() -> None:
         except Exception:
             pass
         _sqlite_conn = None
+
+
+atexit.register(close_pool)
 
 
 @contextmanager

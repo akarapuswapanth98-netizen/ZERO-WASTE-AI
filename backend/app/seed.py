@@ -250,10 +250,104 @@ def seed_database(
             batches_to_insert,
         )
 
-        return {
-            "status": "seeded",
-            "stores_count": len(STORES_DATA),
-            "products_count": len(PRODUCTS_DATA),
-            "sales_records_count": len(sales_to_insert),
-            "batches_count": len(batches_to_insert),
-        }
+    # 5. Populate initial proposals & demo decisions so Planner and Evaluation queues are populated immediately
+    try:
+        _seed_demo_proposals(database_url)
+    except Exception:
+        pass
+
+    return {
+        "status": "seeded",
+        "stores_count": len(STORES_DATA),
+        "products_count": len(PRODUCTS_DATA),
+        "sales_records_count": len(sales_to_insert),
+        "batches_count": len(batches_to_insert),
+    }
+
+
+def _seed_demo_proposals(database_url: Optional[str] = None) -> None:
+    """Generate initial agent proposals and decisions so Planner and Evaluation queues are populated."""
+    from app.routers.agents import run_pipeline_for_item
+    from app.simulation.scenario_engine import run_multi_seed_scenario
+    import json
+
+    with get_db_cursor(database_url) as cur:
+        cur.execute("SELECT COUNT(*) FROM recommendations;")
+        if cur.fetchone()[0] > 0:
+            return
+
+        cur.execute("SELECT id FROM stores ORDER BY id ASC;")
+        store_ids = [r[0] for r in cur.fetchall()]
+        cur.execute("SELECT id FROM products ORDER BY id ASC;")
+        product_ids = [r[0] for r in cur.fetchall()]
+
+    rec_ids = []
+    for sid in store_ids:
+        for pid in product_ids:
+            try:
+                prop = run_pipeline_for_item(sid, pid, horizon_days=7)
+                rec_ids.append(prop.id)
+            except Exception:
+                pass
+
+    if not rec_ids:
+        return
+
+    # Mark first proposal as approved & executed (seeded demo history)
+    with get_db_cursor(database_url) as cur:
+        first_id = rec_ids[0]
+        cur.execute("UPDATE recommendations SET status = 'executed' WHERE id = %s;", (first_id,))
+        cur.execute(
+            """
+            INSERT INTO planner_decisions (recommendation_id, decision, approved_quantity, reason, decided_by, execution_status, decided_at)
+            VALUES (%s, 'approved', 15, 'Approved by planner (Initial seeded demo history)', 'planner', 'executed', CURRENT_TIMESTAMP);
+            """,
+            (first_id,),
+        )
+        cur.execute(
+            """
+            INSERT INTO audit_logs (action_type, entity_type, entity_id, actor, details_json, timestamp)
+            VALUES ('decision_approved', 'recommendation', %s, 'planner', %s, CURRENT_TIMESTAMP);
+            """,
+            (first_id, json.dumps({"decision": "approved", "note": "Initial seeded demo history"})),
+        )
+
+        if len(rec_ids) > 1:
+            second_id = rec_ids[1]
+            cur.execute("UPDATE recommendations SET status = 'rejected' WHERE id = %s;", (second_id,))
+            cur.execute(
+                """
+                INSERT INTO planner_decisions (recommendation_id, decision, approved_quantity, reason, decided_by, execution_status, decided_at)
+                VALUES (%s, 'rejected', 0, 'Declined due to supplier rebate terms (Initial seeded demo history)', 'planner', 'rejected_no_action', CURRENT_TIMESTAMP);
+                """,
+                (second_id,),
+            )
+            cur.execute(
+                """
+                INSERT INTO audit_logs (action_type, entity_type, entity_id, actor, details_json, timestamp)
+                VALUES ('decision_rejected', 'recommendation', %s, 'planner', %s, CURRENT_TIMESTAMP);
+                """,
+                (second_id, json.dumps({"decision": "rejected", "note": "Initial seeded demo history"})),
+            )
+
+    # Run baseline scenario simulation to populate scenario_runs
+    try:
+        sim_res = run_multi_seed_scenario(preset_name="demand_spike", seeds_count=5, horizon_days=14)
+        with get_db_cursor(database_url) as cur:
+            for p_res in sim_res.policy_results:
+                cur.execute(
+                    """
+                    INSERT INTO scenario_runs (preset_name, seed, horizon_days, policy_name, metrics_json)
+                    VALUES (%s, %s, %s, %s, %s);
+                    """,
+                    (
+                        "demand_spike",
+                        5,
+                        14,
+                        p_res["policy_name"],
+                        json.dumps(p_res),
+                    ),
+                )
+    except Exception:
+        pass
+
